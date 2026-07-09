@@ -51,6 +51,7 @@ def prepare(
     fai: dict[str, int] | None = None,
     motif: str | None = None,
     min_len: int = 0,
+    min_count: int = 0,
 ) -> Prepared:
     """Filter/aggregate the raw windows table into a ``Prepared`` bundle."""
     if motif is not None:
@@ -65,6 +66,13 @@ def prepare(
     )
 
     window_size = estimate_window_size(agg)
+
+    # Noise floor: windows whose total repeat count (forward + reverse) is below
+    # min_count are treated as background (zeroed -> white) in BOTH modes, so the
+    # ubiquitous low-level random-match background does not wash out real arrays.
+    if min_count > 0:
+        below = (agg["forward"] + agg["reverse"]) < min_count
+        agg.loc[below, ["forward", "reverse"]] = 0
 
     lengths: dict[str, int] = {}
     for cid, g in agg.groupby("id"):

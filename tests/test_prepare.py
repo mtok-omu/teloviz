@@ -51,6 +51,19 @@ def test_natural_sort_and_min_len(tmp_path):
     assert "scaf" not in p.lengths
 
 
+def test_min_count_zeroes_low_windows():
+    df = _df([
+        ("chr1", 10000, 300, 5, "T"),   # total 305 -> kept
+        ("chr1", 20000, 3, 2, "T"),     # total 5   -> zeroed (noise)
+        ("chr1", 30000, 40, 20, "T"),   # total 60  -> kept (>= 50)
+    ])
+    p = prepare(df, min_count=50)
+    by_w = p.table.set_index("window")
+    assert (by_w.loc[10000, "forward"], by_w.loc[10000, "reverse"]) == (300, 5)
+    assert (by_w.loc[20000, "forward"], by_w.loc[20000, "reverse"]) == (0, 0)
+    assert (by_w.loc[30000, "forward"], by_w.loc[30000, "reverse"]) == (40, 20)
+
+
 def test_length_from_fai_else_max_window():
     df = _df([("chr1", 10000, 1, 0, "T"), ("chr1", 20000, 1, 0, "T")])
     assert prepare(df).lengths["chr1"] == 20000

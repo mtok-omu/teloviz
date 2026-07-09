@@ -57,6 +57,7 @@ teloviz sample_..._windows.tsv --mode both -o sample
 | `--motif` | none | Limit to one motif (default: all) |
 | `--cmap-sum` / `--cmap-div` | `Reds` / `RdBu_r` | Colormaps |
 | `--min-len` | `0` | Drop shorter sequences (0 = keep all) |
+| `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
 | `--width` / `--height` | auto | Figure size (px) |
 | `--dpi` | `200` | Raster (PNG) resolution |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |

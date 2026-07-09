@@ -64,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--min-len", type=int, default=0,
         help="Drop sequences shorter than this (0 = keep all).",
     )
+    p.add_argument(
+        "--min-count", type=int, default=0,
+        help="Noise floor: windows with forward+reverse below this are treated "
+             "as background/white (0 = keep all). Suppresses the pervasive "
+             "random-match background so real telomere arrays stand out.",
+    )
     p.add_argument("--width", type=int, default=None, help="Figure width in px (auto).")
     p.add_argument("--height", type=int, default=None, help="Figure height in px (auto).")
     p.add_argument("--dpi", type=int, default=200, help="Raster (PNG) resolution.")
@@ -105,7 +111,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     fai = load_fai(args.fai) if args.fai is not None else None
-    prepared = prepare(df, fai=fai, motif=args.motif, min_len=args.min_len)
+    prepared = prepare(
+        df, fai=fai, motif=args.motif, min_len=args.min_len, min_count=args.min_count
+    )
 
     if not prepared.order:
         print("teloviz: no sequences to plot (check --motif / --min-len).", file=sys.stderr)
