@@ -1,8 +1,7 @@
 """Command-line interface for teloviz (spec section 8).
 
-Skeleton scope: parse + validate arguments (the full CLI surface from the spec).
-The data pipeline (load tidk TSV -> aggregate -> bin to colors -> matplotlib
-ideogram -> PDF/PNG/SVG export) is wired in later steps.
+Orchestrates the pipeline: load tidk TSV (+ optional .fai) -> aggregate/prepare
+-> per-mode color scheme -> matplotlib ideogram -> PDF/PNG/SVG export.
 """
 
 from __future__ import annotations
@@ -91,14 +90,45 @@ def main(argv: list[str] | None = None) -> int:
 
     out_prefix = args.out_prefix or args.input.name.split("_telomeric_repeat_windows")[0]
 
-    # TODO: pipeline — load(args.input) -> aggregate(args.motif) -> bin(args.bin,
-    # args.cap, args.log) -> matplotlib ideogram per mode -> savefig(args.formats).
+    # Import the pipeline lazily so `--version`/`--help` don't pay the matplotlib
+    # import cost.
+    from .color import build_scheme
+    from .io_windows import TelovizInputError, load_fai, load_windows
+    from .prepare import prepare
+    from .render import render, save
+    from ._mpl import plt
+
+    try:
+        df = load_windows(args.input)
+    except TelovizInputError as e:
+        print(f"teloviz: {e}", file=sys.stderr)
+        return 2
+
+    fai = load_fai(args.fai) if args.fai is not None else None
+    prepared = prepare(df, fai=fai, motif=args.motif, min_len=args.min_len)
+
+    if not prepared.order:
+        print("teloviz: no sequences to plot (check --motif / --min-len).", file=sys.stderr)
+        return 1
+
+    modes = ["sum", "orientation"] if args.mode == "both" else [args.mode]
+    written: list[str] = []
+    for mode in modes:
+        scheme = build_scheme(
+            mode, bin_w=args.bin, cap=args.cap, log=args.log,
+            cmap_sum=args.cmap_sum, cmap_div=args.cmap_div,
+        )
+        fig = render(prepared, scheme, width=args.width, height=args.height)
+        paths = save(fig, out_prefix, mode, args.formats, args.dpi)
+        plt.close(fig)
+        written.extend(str(p) for p in paths)
+
     print(
-        f"teloviz {__version__}: parsed OK "
-        f"(input={args.input}, mode={args.mode}, bin={args.bin}, cap={args.cap}, "
-        f"formats={','.join(args.formats)}, out_prefix={out_prefix}). "
-        f"Pipeline not yet implemented.",
+        f"teloviz {__version__}: {len(prepared.order)} sequences, "
+        f"window_size={prepared.window_size}. Wrote:"
     )
+    for p in written:
+        print(f"  {p}")
     return 0
 
 
