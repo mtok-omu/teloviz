@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Example invocation. For large genomes, submit via Slurm rather than running on
-# the login node.
+# Example invocation. tidk must already have been run to produce the windows TSV.
+# teloviz itself is light and headless (no display, no external binary).
 set -euo pipefail
 
 source $HOME/miniforge3/etc/profile.d/conda.sh
 conda activate tool_dev
 
 teloviz \
-  --input demo/example.fasta \
-  --motif TTAGGG \
-  --window 1000 \
-  --output teloviz_out
+  sample_telomeric_repeat_windows.tsv \
+  --fai sample.fa.fai \
+  --mode both \
+  --bin 100 --cap 500 \
+  -o sample \
+  --format pdf,png

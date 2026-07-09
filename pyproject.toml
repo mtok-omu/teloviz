@@ -5,13 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "teloviz"
 version = "0.1.0"
-description = "Telomere repeat detection and visualization along genome sequences"
+description = "Ideogram-style visualization of tidk telomere-repeat windows for assembly QC"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "biopython>=1.80",
     "pandas>=1.5",
+    # matplotlib renders PDF/PNG/SVG natively and fully headless (Agg backend) —
+    # no browser or external binary, unlike plotly's static export (kaleido/Chrome).
     "matplotlib>=3.6",
+    "natsort>=8",
 ]
 
 [project.optional-dependencies]
