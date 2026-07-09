@@ -1,0 +1,22 @@
+# Python 自動生成物
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+build/
+dist/
+
+# 本番の大きなゲノムデータ / 生成物(将来 input/ output に置く想定)
+/input/
+/output_dir/
+/teloviz_out/
+tempfiles*/
+
+# 内部開発ドキュメント(検証データの素性など私的情報を含むためGitHubには上げない)
+/tool_dev.md
+/DEVELOPMENT.md
+
+# ただし demo/ のテストデータは上げる(下で明示的に許可)
+!demo/*.fasta
+!demo/*.fa
+!demo/*.png
