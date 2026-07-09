@@ -65,6 +65,10 @@ class ColorScheme:
         v = np.clip(v, -self.cap, self.cap)
         return np.sign(v) * np.log1p(np.abs(v)) if self.log else v
 
+    def rgba(self, values: np.ndarray) -> np.ndarray:
+        """RGBA color (N x 4) for each raw value, via transform -> norm -> cmap."""
+        return self.cmap(self.norm(self.transform(np.asarray(values, dtype=float))))
+
     def scalar_mappable(self) -> ScalarMappable:
         sm = ScalarMappable(norm=self.norm, cmap=self.cmap)
         sm.set_array([])

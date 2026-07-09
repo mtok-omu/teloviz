@@ -1,10 +1,11 @@
 """Ideogram rendering + export for teloviz (spec sections 6-7).
 
-Each chromosome is one length-proportional horizontal strip. A strip is drawn as
-a single ``imshow`` row (one column per window) rather than thousands of patches,
-so a 20-chromosome / 200k-window genome renders fast and stays small. Missing
-windows and the unmeasured tail are NaN -> white. A thin outline marks the true
-sequence length; data-free regions stay white.
+Each chromosome is one length-proportional horizontal bar. Only *non-white*
+windows (telomere arrays, internal clusters) are drawn, as true-position vector
+rectangles — so the bar stays honestly length-proportional (no fattening) and
+the PDF/SVG is zoomable in any viewer: zoom into an end and the thin telomere
+rectangle stays crisp at its real size. Background/missing windows are simply not
+drawn (white). A thin outline marks the true sequence length.
 """
 
 from __future__ import annotations
@@ -12,12 +13,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter
 
 from ._mpl import plt
 from .color import ColorScheme
 from .prepare import Prepared
+
+# Above this many drawn rectangles we warn (suggest --min-count); still vector.
+_DENSE_WARN = 100_000
 
 
 def render(
@@ -40,27 +45,40 @@ def render(
     max_len = max(lengths.values()) if lengths else 1
     table = prepared.table
 
+    rects: list[Rectangle] = []
+    facecolors: list = []
     for i, cid in enumerate(order):
         y = n - 1 - i  # first (natural-sorted) id on top
         length = lengths[cid]
-        ncols = max(1, int(np.ceil(length / ws)))
 
-        grid = np.full(ncols, np.nan)
         sub = table[table["id"] == cid]
-        col = np.rint(sub["window"].to_numpy() / ws).astype(int) - 1
+        windows = sub["window"].to_numpy()
         vals = scheme.values(sub["forward"].to_numpy(), sub["reverse"].to_numpy())
-        valid = (col >= 0) & (col < ncols)
-        grid[col[valid]] = scheme.transform(vals[valid])
+        colors = scheme.rgba(vals)
+        for w, rgba in zip(windows, colors):
+            if np.allclose(rgba, (1.0, 1.0, 1.0, 1.0)):
+                continue  # background / net~0 / below --min-count -> draw nothing
+            start = max(0.0, w - ws)
+            end = min(float(w), length)
+            if end <= start:
+                continue
+            rects.append(Rectangle((start, y - 0.4), end - start, 0.8))
+            facecolors.append(rgba)
 
-        data = np.ma.masked_invalid(grid).reshape(1, -1)
-        ax.imshow(
-            data, aspect="auto", cmap=scheme.cmap, norm=scheme.norm,
-            extent=[0, ncols * ws, y - 0.4, y + 0.4],
-            interpolation="nearest", origin="lower", zorder=1,
-        )
-        # True-length outline so white regions never hide the bar's extent/ends.
+        # True-length outline so the bar's extent and ends read even when white.
         ax.add_patch(Rectangle((0, y - 0.4), length, 0.8, fill=False,
                                edgecolor="black", linewidth=0.5, zorder=2))
+
+    if len(rects) > _DENSE_WARN:
+        import sys
+        print(
+            f"teloviz: warning: drawing {len(rects)} window rectangles; consider "
+            f"--min-count to suppress background and shrink the figure.",
+            file=sys.stderr,
+        )
+    if rects:
+        ax.add_collection(PatchCollection(rects, facecolors=facecolors,
+                                          edgecolors="none", zorder=1))
 
     ax.set_xlim(0, max_len * 1.01)
     ax.set_ylim(-0.6, n - 0.4)
