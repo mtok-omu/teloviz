@@ -19,8 +19,10 @@ Two complementary modes:
 Rendered with **matplotlib** to vector **PDF** (default; also PNG/SVG). Fully
 headless — no browser or external binary needed.
 
-> **Status:** early skeleton. The CLI parses the full argument surface; the data
-> pipeline and plotting are not implemented yet. Spec: `tool_dev.md` (internal).
+> **Status:** working v0.1 — full pipeline (load → prepare → color → render) for
+> `sum` / `orientation` / `both`, PDF/PNG/SVG output. Try it on the bundled demo:
+> `python demo/make_demo.py && teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode both -o demo/sample`.
+> Spec: `tool_dev.md` (internal).
 
 ## Install (dev)
 
