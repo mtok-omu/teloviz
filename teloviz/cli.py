@@ -70,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
              "as background/white (0 = keep all). Suppresses the pervasive "
              "random-match background so real telomere arrays stand out.",
     )
+    p.add_argument(
+        "--ends", type=float, default=None, metavar="MB",
+        help="Both-ends view: show only the first/last MB (megabases) of each "
+             "chromosome, joined by a break (middle elided). Off = full length.",
+    )
     p.add_argument("--width", type=int, default=None, help="Figure width in px (auto).")
     p.add_argument("--height", type=int, default=None, help="Figure height in px (auto).")
     p.add_argument("--dpi", type=int, default=200, help="Raster (PNG) resolution.")
@@ -101,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     from .color import build_scheme
     from .io_windows import TelovizInputError, load_fai, load_windows
     from .prepare import prepare
-    from .render import render, save
+    from .render import render, render_ends, save
     from ._mpl import plt
 
     try:
@@ -126,8 +131,14 @@ def main(argv: list[str] | None = None) -> int:
             mode, bin_w=args.bin, cap=args.cap, log=args.log,
             cmap_sum=args.cmap_sum, cmap_div=args.cmap_div,
         )
-        fig = render(prepared, scheme, width=args.width, height=args.height)
-        paths = save(fig, out_prefix, mode, args.formats, args.dpi)
+        if args.ends is not None:
+            fig = render_ends(prepared, scheme, ends_bp=int(args.ends * 1_000_000),
+                              width=args.width, height=args.height)
+            label = f"{mode}.ends"
+        else:
+            fig = render(prepared, scheme, width=args.width, height=args.height)
+            label = mode
+        paths = save(fig, out_prefix, label, args.formats, args.dpi)
         plt.close(fig)
         written.extend(str(p) for p in paths)
 

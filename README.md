@@ -43,7 +43,15 @@ teloviz sample_..._windows.tsv --mode orientation --bin 50 --cap 1000 --log -o s
 
 # both modes at once
 teloviz sample_..._windows.tsv --mode both -o sample
+
+# compact both-ends view for publication / T2T-cap QC (first & last 0.5 Mb)
+teloviz sample_..._windows.tsv --fai sample.fa.fai --min-count 50 --ends 0.5 -o sample
 ```
+
+Output is vector PDF/SVG: telomeres sit at their true (thin) positions, so zoom
+into an end in any viewer to inspect them — no interactive HTML needed. The
+`--ends N` view joins each chromosome's first/last *N* Mb with a `≈` break, so
+whether each end is telomere-capped reads at a glance at print scale.
 
 | Option | Default | Meaning |
 |--------|---------|---------|
@@ -58,6 +66,7 @@ teloviz sample_..._windows.tsv --mode both -o sample
 | `--cmap-sum` / `--cmap-div` | `Reds` / `RdBu_r` | Colormaps |
 | `--min-len` | `0` | Drop shorter sequences (0 = keep all) |
 | `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
+| `--ends` | none | Both-ends view: show first/last N Mb per chromosome, middle elided with a `≈` break |
 | `--width` / `--height` | auto | Figure size (px) |
 | `--dpi` | `200` | Raster (PNG) resolution |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |
