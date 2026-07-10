@@ -27,14 +27,12 @@ per-chromosome counts, calls, and the exact settings/command (disable: `--no-cal
 
 > **Status:** working v0.1 — full pipeline (load → prepare → color → render) for
 > `sum` / `orientation` / `both`, PDF/PNG/SVG output. Try it on the bundled demo:
-> `python demo/make_demo.py && teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode both -o demo/sample`.
-> Spec: `tool_dev.md` (internal).
+> `python demo/make_demo.py && teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode both -o demo/out`.
 
 ## Install (dev)
 
 ```bash
-source $HOME/miniforge3/etc/profile.d/conda.sh
-conda activate tool_dev
+python -m venv .venv && source .venv/bin/activate   # or activate a conda env
 pip install -e .
 ```
 

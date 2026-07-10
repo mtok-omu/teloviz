@@ -3,8 +3,8 @@
 # teloviz itself is light and headless (no display, no external binary).
 set -euo pipefail
 
-source $HOME/miniforge3/etc/profile.d/conda.sh
-conda activate tool_dev
+# Activate whatever environment teloviz is installed in, e.g.:
+#   conda activate teloviz   # or: source .venv/bin/activate
 
 teloviz \
   sample_telomeric_repeat_windows.tsv \
