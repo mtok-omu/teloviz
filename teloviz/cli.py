@@ -93,6 +93,9 @@ def build_parser() -> argparse.ArgumentParser:
              "as background/white (0 = keep all). Suppresses the pervasive "
              "random-match background so real telomere arrays stand out.",
     )
+    p.add_argument("--font-size", type=float, default=10.0, metavar="PT",
+                   help="Base text size in points; all labels/title/ticks scale "
+                        "from it (default: 10).")
     p.add_argument("--width", type=float, default=None, metavar="IN",
                    help="Figure width in inches (default: auto = 10).")
     p.add_argument("--height", type=float, default=None, metavar="IN",
@@ -167,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             cmap_sum=args.cmap_sum, cmap_div=args.cmap_div,
         )
         fig = render(prepared, scheme, style=args.style, dot_size=args.dot_size,
-                     calls=calls, call_note=call_note,
+                     calls=calls, call_note=call_note, font_size=args.font_size,
                      width=args.width, height=args.height)
         label = mode
         # When the user pins both dimensions, keep the exact size (no tight-bbox

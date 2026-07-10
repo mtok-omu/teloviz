@@ -134,6 +134,7 @@ For `-o myasm` (and `--format pdf,png` to add PNGs):
 | `--no-call` | off | Disable telomere calling (no end markers, no HTML report) |
 | `--min-len` | `0` | Drop sequences shorter than this (0 = keep all) |
 | `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
+| `--font-size` | `10` | Base text size in points; all labels/title/ticks scale from it |
 | `--width` / `--height` | auto | Figure size in **inches**. Set both to fix the exact aspect ratio (whitespace trim is disabled so the ratio is preserved) |
 | `--dpi` | `200` | Raster (PNG) resolution (output px = inches × dpi) |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |

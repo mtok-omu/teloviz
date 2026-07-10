@@ -61,31 +61,45 @@ def _draw_rects(ax, rects, facecolors):
 
 
 def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title,
-                        labels=None, subtitle=None):
+                        labels=None, subtitle=None, fs=10.0):
+    # All text sizes are set explicitly (as multiples of the base font size ``fs``)
+    # so they survive save() regardless of rcParams. fs=10 reproduces the defaults.
     ax.set_yticks(range(n))
-    ax.set_yticklabels(list(reversed(labels if labels is not None else order)))
+    ax.set_yticklabels(list(reversed(labels if labels is not None else order)),
+                       fontsize=fs)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     # Stack title + optional note in *points* above the axes top, so they never
     # collide regardless of figure height (a fig-fraction offset would).
-    ax.set_title(f"teloviz — {title}", pad=34 if subtitle else 6)
+    ax.set_title(f"teloviz — {title}", pad=3.4 * fs if subtitle else 6,
+                 fontsize=1.2 * fs)
     if subtitle:
         ax.annotate(subtitle, xy=(0.5, 1), xycoords="axes fraction",
-                    xytext=(0, 7), textcoords="offset points",
-                    ha="center", va="bottom", fontsize=7.5, color="#555")
+                    xytext=(0, 0.7 * fs), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=0.75 * fs, color="#555")
     # Margins in *absolute inches* (converted to the fractions subplots_adjust
     # wants), so the title/labels/colorbar keep their real size at ANY figure
     # height — fixed fractions would clip the title on short figures and leave a
-    # huge blank on tall ones. The bottom band holds the colorbar.
+    # huge blank on tall ones. Margins scale with the font so larger text still
+    # fits. The bottom band holds the colorbar.
     fw, fh = fig.get_size_inches()
-    left_in, right_in, top_in, bottom_in = 1.0, 0.35, 0.8, 1.35
+    r = fs / 10.0
+    left_in, right_in, top_in, bottom_in = 1.0 * r, 0.35, 0.8 * r, 1.35 * r
+    # Clamp so the margins can never exceed the figure (a small figure with a big
+    # font would otherwise make bottom >= top and crash); shrink them to fit.
+    if top_in + bottom_in > 0.85 * fh:
+        s = 0.85 * fh / (top_in + bottom_in)
+        top_in *= s; bottom_in *= s
+    if left_in + right_in > 0.85 * fw:
+        s = 0.85 * fw / (left_in + right_in)
+        left_in *= s; right_in *= s
     fig.subplots_adjust(left=left_in / fw, right=1 - right_in / fw,
                         top=1 - top_in / fh, bottom=bottom_in / fh)
-    cax = fig.add_axes((0.34, 0.55 / fh, 0.34, 0.11 / fh))
+    cax = fig.add_axes((0.34, 0.55 * r / fh, 0.34, 0.11 / fh))
     cbar = fig.colorbar(scheme.scalar_mappable(), cax=cax, orientation="horizontal",
                         ticks=scheme.tick_positions())
-    cbar.ax.set_xticklabels(scheme.tick_labels(), fontsize=7)
-    cbar.set_label(scheme.cbar_label())
+    cbar.ax.set_xticklabels(scheme.tick_labels(), fontsize=0.7 * fs)
+    cbar.set_label(scheme.cbar_label(), fontsize=fs)
 
 
 def _add_backbone(ax, x0, y, width, style):
@@ -115,19 +129,22 @@ def _mark_calls(ax, y, length, call, gutter):
 
 def render(prepared: Prepared, scheme: ColorScheme, *,
            style: str = "dot", dot_size: float = 40.0, calls=None,
-           call_note: str | None = None,
+           call_note: str | None = None, font_size: float = 10.0,
            width: float | None = None, height: float | None = None):
     """Full-length ideogram (one length-proportional bar per chromosome).
 
     ``width``/``height`` are the figure size in inches (both None → auto: width
-    10, height scales with chromosome count). ``calls`` (optional list of
-    :class:`~teloviz.calling.Call`) adds telomere-cap markers at capped bar ends
-    and a ``*`` on both-ends-capped chromosome labels.
+    10, height scales with chromosome count). ``font_size`` is the base text size
+    in points (all text scales from it; 10 reproduces the defaults). ``calls``
+    (optional list of :class:`~teloviz.calling.Call`) adds telomere-cap markers at
+    capped bar ends and a ``*`` on both-ends-capped chromosome labels.
     """
     order, lengths = prepared.order, prepared.lengths
     n = len(order)
+    r = font_size / 10.0
     fig_w = width if width else 10.0
-    fig_h = height if height else max(2.0, 0.42 * n + 1.6)
+    # Auto height scales with the font so big labels get taller rows/margins.
+    fig_h = height if height else max(2.5 * r, (0.42 * n + 1.6) * r)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     by_id = {c.id: c for c in calls} if calls else {}
@@ -156,10 +173,11 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     labels = [cid + (" *" if by_id.get(cid) and by_id[cid].both else "") for cid in order]
     ax.set_xlim(-gutter, max_len * 1.01 + 0.5 * gutter)
     ax.set_ylim(-0.6, n - 0.4)
-    ax.set_xlabel("Position (Mb)")
+    ax.set_xlabel("Position (Mb)", fontsize=font_size)
+    ax.tick_params(axis="x", labelsize=font_size)
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _p: f"{x / 1e6:g}"))
     _style_and_colorbar(fig, ax, scheme, order, n, scheme.mode,
-                        labels=labels, subtitle=call_note)
+                        labels=labels, subtitle=call_note, fs=font_size)
     return fig
 
 
