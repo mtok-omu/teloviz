@@ -61,6 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cmap-sum", default="Reds", help="Colormap for sum mode.")
     p.add_argument("--cmap-div", default="RdBu_r", help="Diverging colormap for orientation mode.")
     p.add_argument(
+        "--style", choices=("dot", "rect"), default="dot",
+        help="Mark style on the chromosome bar: dot (fixed-size round marker at "
+             "each window, always visible) / rect (honest length-proportional).",
+    )
+    p.add_argument(
+        "--dot-size", type=float, default=20.0,
+        help="Round marker area in points^2 (dot style only; larger = bigger dots).",
+    )
+    p.add_argument(
         "--min-len", type=int, default=0,
         help="Drop sequences shorter than this (0 = keep all).",
     )
@@ -133,10 +142,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         if args.ends is not None:
             fig = render_ends(prepared, scheme, ends_bp=int(args.ends * 1_000_000),
+                              style=args.style, dot_size=args.dot_size,
                               width=args.width, height=args.height)
             label = f"{mode}.ends"
         else:
-            fig = render(prepared, scheme, width=args.width, height=args.height)
+            fig = render(prepared, scheme, style=args.style, dot_size=args.dot_size,
+                         width=args.width, height=args.height)
             label = mode
         paths = save(fig, out_prefix, label, args.formats, args.dpi)
         plt.close(fig)

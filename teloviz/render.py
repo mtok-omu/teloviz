@@ -1,13 +1,22 @@
 """Ideogram rendering + export for teloviz (spec sections 6-7).
 
 Two layouts, both drawing only *non-white* windows (telomere arrays / internal
-clusters) as true-position vector rectangles — honest length-proportional, no
-fattening, and zoomable in any PDF/SVG viewer:
+clusters) on a length-proportional chromosome bar:
 
 - ``render``      : full-length bars (best for internal clusters / overview).
 - ``render_ends`` : a compact both-ends view. Each chromosome shows its first N
   and last N bp joined by a ``≈`` break, so the elided middle costs no width.
   Good for publication and for reading which ends are telomere-capped (T2T).
+
+Two mark styles (``style=``):
+
+- ``dot``  (default): each non-white window is a fixed-size round marker at its
+  genomic centre on a light-gray length bar. Telomere arrays sit in a handful of
+  tiny windows, so honest-width rectangles vanish to invisible slivers on a
+  multi-Mb bar; a fixed on-screen dot size (``--dot-size``) stays readable
+  regardless of window width. Position stays true; only the mark size is fixed.
+- ``rect``: the honest length-proportional filled rectangle (true width, no
+  fattening, zoomable in any PDF/SVG viewer). Kept for internal-cluster extent.
 """
 
 from __future__ import annotations
@@ -27,7 +36,8 @@ from .prepare import Prepared
 
 # Above this many drawn rectangles we warn (suggest --min-count); still vector.
 _DENSE_WARN = 100_000
-_BAR_H = 0.8  # bar height in y units
+_BAR_H = 0.8            # bar height in y units
+_BAR_FILL = "#f0f0f0"  # length-bar body fill in dot style (so the chr is visible)
 
 
 def _nice_step(span: float) -> float:
@@ -82,7 +92,19 @@ def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title):
     cbar.set_label(scheme.cbar_label())
 
 
+def _add_backbone(ax, x0, y, width, style):
+    """Draw one chromosome length bar; filled gray for dots, outline for rects."""
+    if style == "dot":
+        ax.add_patch(Rectangle((x0, y - _BAR_H / 2), width, _BAR_H,
+                               facecolor=_BAR_FILL, edgecolor="black",
+                               linewidth=0.5, zorder=1))
+    else:
+        ax.add_patch(Rectangle((x0, y - _BAR_H / 2), width, _BAR_H, fill=False,
+                               edgecolor="black", linewidth=0.5, zorder=2))
+
+
 def render(prepared: Prepared, scheme: ColorScheme, *,
+           style: str = "dot", dot_size: float = 20.0,
            width: int | None = None, height: int | None = None):
     """Full-length ideogram (one length-proportional bar per chromosome)."""
     order, lengths = prepared.order, prepared.lengths
@@ -93,15 +115,20 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
 
     max_len = max(lengths.values()) if lengths else 1
     rects, facecolors = [], []
+    dot_xs, dot_ys, dot_cs = [], [], []
     for i, cid in enumerate(order):
         y = n - 1 - i
+        _add_backbone(ax, 0, y, lengths[cid], style)
         for start, end, rgba in _iter_windows(prepared, scheme, cid):
-            if end > start:
+            if style == "dot":
+                dot_xs.append((start + end) / 2.0); dot_ys.append(y); dot_cs.append(rgba)
+            elif end > start:
                 rects.append(Rectangle((start, y - _BAR_H / 2), end - start, _BAR_H))
                 facecolors.append(rgba)
-        ax.add_patch(Rectangle((0, y - _BAR_H / 2), lengths[cid], _BAR_H,
-                               fill=False, edgecolor="black", linewidth=0.5, zorder=2))
-    _draw_rects(ax, rects, facecolors)
+    if style == "dot":
+        ax.scatter(dot_xs, dot_ys, c=dot_cs, s=dot_size, edgecolors="none", zorder=3)
+    else:
+        _draw_rects(ax, rects, facecolors)
 
     ax.set_xlim(0, max_len * 1.01)
     ax.set_ylim(-0.6, n - 0.4)
@@ -112,6 +139,7 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
 
 
 def render_ends(prepared: Prepared, scheme: ColorScheme, *, ends_bp: int,
+                style: str = "dot", dot_size: float = 20.0,
                 width: int | None = None, height: int | None = None):
     """Both-ends view: first/last ``ends_bp`` per chromosome, joined by a break."""
     order, lengths = prepared.order, prepared.lengths
@@ -126,11 +154,20 @@ def render_ends(prepared: Prepared, scheme: ColorScheme, *, ends_bp: int,
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     rects, facecolors = [], []
+    dot_xs, dot_ys, dot_cs = [], [], []
     for i, cid in enumerate(order):
         y = n - 1 - i
         L = lengths[cid]
         y0 = y - _BAR_H / 2
         for start, end, rgba in _iter_windows(prepared, scheme, cid):
+            if style == "dot":
+                # Place a dot at the window centre, into whichever panel it falls in.
+                g = (start + end) / 2.0
+                if g < N:
+                    dot_xs.append(g); dot_ys.append(y); dot_cs.append(rgba)
+                elif g > L - N:
+                    dot_xs.append(offset + (g - (L - N))); dot_ys.append(y); dot_cs.append(rgba)
+                continue
             # Left (5') panel: genomic [0, N] -> x = genomic.
             ls, le = start, min(end, N)
             if le > ls and ls < N:
@@ -140,15 +177,16 @@ def render_ends(prepared: Prepared, scheme: ColorScheme, *, ends_bp: int,
             if re > rs and re > L - N:
                 x0 = offset + (rs - (L - N))
                 rects.append(Rectangle((x0, y0), re - rs, _BAR_H)); facecolors.append(rgba)
-        # Panel outlines (only the part that exists for short chromosomes).
-        ax.add_patch(Rectangle((0, y0), min(N, L), _BAR_H, fill=False,
-                               edgecolor="black", linewidth=0.5, zorder=2))
-        ax.add_patch(Rectangle((offset + max(0.0, N - L), y0), min(N, L), _BAR_H,
-                               fill=False, edgecolor="black", linewidth=0.5, zorder=2))
+        # Panel backbones (only the part that exists for short chromosomes).
+        _add_backbone(ax, 0, y, min(N, L), style)
+        _add_backbone(ax, offset + max(0.0, N - L), y, min(N, L), style)
         # Break marker in the gap.
         if L > 2 * N:
             ax.text(N + gap / 2, y, "≈", ha="center", va="center", fontsize=9)
-    _draw_rects(ax, rects, facecolors)
+    if style == "dot":
+        ax.scatter(dot_xs, dot_ys, c=dot_cs, s=dot_size, edgecolors="none", zorder=3)
+    else:
+        _draw_rects(ax, rects, facecolors)
 
     ax.set_xlim(-0.02 * N, total_x + 0.02 * N)
     ax.set_ylim(-0.6, n - 0.4)
