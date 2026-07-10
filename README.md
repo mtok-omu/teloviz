@@ -83,6 +83,9 @@ teloviz windows.tsv --mode orientation --bin 50 --cap 1000 --log -o myasm
 
 # honest length-proportional rectangles instead of fixed-size dots
 teloviz windows.tsv --style rect -o myasm
+
+# fix the exact aspect ratio (inches); e.g. a wide 16x6 figure
+teloviz windows.tsv --width 16 --height 6 -o myasm
 ```
 
 ## Reading the plot
@@ -131,8 +134,8 @@ For `-o myasm` (and `--format pdf,png` to add PNGs):
 | `--no-call` | off | Disable telomere calling (no end markers, no HTML report) |
 | `--min-len` | `0` | Drop sequences shorter than this (0 = keep all) |
 | `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
-| `--width` / `--height` | auto | Figure size (px) |
-| `--dpi` | `200` | Raster (PNG) resolution |
+| `--width` / `--height` | auto | Figure size in **inches**. Set both to fix the exact aspect ratio (whitespace trim is disabled so the ratio is preserved) |
+| `--dpi` | `200` | Raster (PNG) resolution (output px = inches × dpi) |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |
 
 ## Development

@@ -73,11 +73,15 @@ def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title,
         ax.annotate(subtitle, xy=(0.5, 1), xycoords="axes fraction",
                     xytext=(0, 7), textcoords="offset points",
                     ha="center", va="bottom", fontsize=7.5, color="#555")
-    # A dedicated bottom colorbar axes (figure coords) keeps a fixed, small gap
-    # regardless of how tall the ideogram is — fig.colorbar(ax=...) would reserve
-    # a fraction of a very tall axes and leave a huge blank.
-    fig.subplots_adjust(left=0.12, right=0.97, top=0.95, bottom=0.09)
-    cax = fig.add_axes((0.30, 0.045, 0.40, 0.010))
+    # Margins in *absolute inches* (converted to the fractions subplots_adjust
+    # wants), so the title/labels/colorbar keep their real size at ANY figure
+    # height — fixed fractions would clip the title on short figures and leave a
+    # huge blank on tall ones. The bottom band holds the colorbar.
+    fw, fh = fig.get_size_inches()
+    left_in, right_in, top_in, bottom_in = 1.0, 0.35, 0.8, 1.35
+    fig.subplots_adjust(left=left_in / fw, right=1 - right_in / fw,
+                        top=1 - top_in / fh, bottom=bottom_in / fh)
+    cax = fig.add_axes((0.34, 0.55 / fh, 0.34, 0.11 / fh))
     cbar = fig.colorbar(scheme.scalar_mappable(), cax=cax, orientation="horizontal",
                         ticks=scheme.tick_positions())
     cbar.ax.set_xticklabels(scheme.tick_labels(), fontsize=7)
@@ -112,16 +116,18 @@ def _mark_calls(ax, y, length, call, gutter):
 def render(prepared: Prepared, scheme: ColorScheme, *,
            style: str = "dot", dot_size: float = 40.0, calls=None,
            call_note: str | None = None,
-           width: int | None = None, height: int | None = None):
+           width: float | None = None, height: float | None = None):
     """Full-length ideogram (one length-proportional bar per chromosome).
 
-    ``calls`` (optional list of :class:`~teloviz.calling.Call`) adds telomere-cap
-    markers at capped bar ends and a ``*`` on both-ends-capped chromosome labels.
+    ``width``/``height`` are the figure size in inches (both None → auto: width
+    10, height scales with chromosome count). ``calls`` (optional list of
+    :class:`~teloviz.calling.Call`) adds telomere-cap markers at capped bar ends
+    and a ``*`` on both-ends-capped chromosome labels.
     """
     order, lengths = prepared.order, prepared.lengths
     n = len(order)
-    fig_w = width / 100 if width else 10.0
-    fig_h = height / 100 if height else max(2.0, 0.42 * n + 1.6)
+    fig_w = width if width else 10.0
+    fig_h = height if height else max(2.0, 0.42 * n + 1.6)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     by_id = {c.id: c for c in calls} if calls else {}
@@ -157,13 +163,21 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     return fig
 
 
-def save(fig, out_prefix: str, label: str, formats: list[str], dpi: int) -> list[Path]:
-    """Export the figure to every requested format; return the paths written."""
+def save(fig, out_prefix: str, label: str, formats: list[str], dpi: int,
+         tight: bool = True) -> list[Path]:
+    """Export the figure to every requested format; return the paths written.
+
+    ``tight`` trims surrounding whitespace (nice by default) but then the saved
+    aspect ratio follows the content, not the requested figure size. Pass
+    ``tight=False`` to honor the exact figure dimensions (used when the user sets
+    both --width and --height, so the requested ratio is preserved precisely).
+    """
+    bbox = "tight" if tight else None
     paths: list[Path] = []
     for fmt in formats:
         p = Path(f"{out_prefix}.{label}.{fmt}")
         if p.parent != Path(""):
             p.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(p, dpi=dpi, bbox_inches="tight")
+        fig.savefig(p, dpi=dpi, bbox_inches=bbox)
         paths.append(p)
     return paths

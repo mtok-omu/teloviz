@@ -93,8 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
              "as background/white (0 = keep all). Suppresses the pervasive "
              "random-match background so real telomere arrays stand out.",
     )
-    p.add_argument("--width", type=int, default=None, help="Figure width in px (auto).")
-    p.add_argument("--height", type=int, default=None, help="Figure height in px (auto).")
+    p.add_argument("--width", type=float, default=None, metavar="IN",
+                   help="Figure width in inches (default: auto = 10).")
+    p.add_argument("--height", type=float, default=None, metavar="IN",
+                   help="Figure height in inches (default: auto, scales with the "
+                        "number of chromosomes). Set both --width and --height to "
+                        "fix the exact aspect ratio (whitespace trimming is turned "
+                        "off so the ratio is preserved).")
     p.add_argument("--dpi", type=int, default=200, help="Raster (PNG) resolution.")
     p.add_argument(
         "--format", type=parse_formats, default="pdf", dest="formats",
@@ -165,7 +170,11 @@ def main(argv: list[str] | None = None) -> int:
                      calls=calls, call_note=call_note,
                      width=args.width, height=args.height)
         label = mode
-        paths = save(fig, out_prefix, label, args.formats, args.dpi)
+        # When the user pins both dimensions, keep the exact size (no tight-bbox
+        # trim) so the requested aspect ratio is honored.
+        exact_size = args.width is not None and args.height is not None
+        paths = save(fig, out_prefix, label, args.formats, args.dpi,
+                     tight=not exact_size)
         plt.close(fig)
         written.extend(str(p) for p in paths)
 
