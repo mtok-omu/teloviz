@@ -1,12 +1,8 @@
 """Ideogram rendering + export for teloviz (spec sections 6-7).
 
-Two layouts, both drawing only *non-white* windows (telomere arrays / internal
-clusters) on a length-proportional chromosome bar:
-
-- ``render``      : full-length bars (best for internal clusters / overview).
-- ``render_ends`` : a compact both-ends view. Each chromosome shows its first N
-  and last N bp joined by a ``≈`` break, so the elided middle costs no width.
-  Good for publication and for reading which ends are telomere-capped (T2T).
+``render`` draws a full-length ideogram: one length-proportional bar per
+chromosome, showing only *non-white* windows (telomere arrays / internal
+clusters = misjoin hints).
 
 Two mark styles (``style=``):
 
@@ -21,7 +17,6 @@ Two mark styles (``style=``):
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -38,16 +33,6 @@ from .prepare import Prepared
 _DENSE_WARN = 100_000
 _BAR_H = 0.3            # bar height in y units (thin backbone; dots sit on top)
 _BAR_FILL = "#f0f0f0"  # length-bar body fill in dot style (so the chr is visible)
-
-
-def _nice_step(span: float) -> float:
-    """A round tick step giving ~3-4 ticks across ``span``."""
-    raw = span / 3 if span > 0 else 1
-    mag = 10 ** math.floor(math.log10(raw))
-    for m in (1, 2, 2.5, 5, 10):
-        if m * mag >= raw:
-            return m * mag
-    return 10 * mag
 
 
 def _iter_windows(prepared: Prepared, scheme: ColorScheme, cid: str):
@@ -135,76 +120,6 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     ax.set_xlabel("Position (Mb)")
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _p: f"{x / 1e6:g}"))
     _style_and_colorbar(fig, ax, scheme, order, n, scheme.mode)
-    return fig
-
-
-def render_ends(prepared: Prepared, scheme: ColorScheme, *, ends_bp: int,
-                style: str = "dot", dot_size: float = 40.0,
-                width: int | None = None, height: int | None = None):
-    """Both-ends view: first/last ``ends_bp`` per chromosome, joined by a break."""
-    order, lengths = prepared.order, prepared.lengths
-    n = len(order)
-    N = float(ends_bp)
-    gap = 0.10 * N          # visual break width
-    offset = N + gap        # x where the right (3') panel starts
-    total_x = 2 * N + gap
-
-    fig_w = width / 100 if width else 8.0
-    fig_h = height / 100 if height else max(2.0, 0.42 * n + 1.8)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-
-    rects, facecolors = [], []
-    dot_xs, dot_ys, dot_cs = [], [], []
-    for i, cid in enumerate(order):
-        y = n - 1 - i
-        L = lengths[cid]
-        y0 = y - _BAR_H / 2
-        for start, end, rgba in _iter_windows(prepared, scheme, cid):
-            if style == "dot":
-                # Place a dot at the window centre, into whichever panel it falls in.
-                g = (start + end) / 2.0
-                if g < N:
-                    dot_xs.append(g); dot_ys.append(y); dot_cs.append(rgba)
-                elif g > L - N:
-                    dot_xs.append(offset + (g - (L - N))); dot_ys.append(y); dot_cs.append(rgba)
-                continue
-            # Left (5') panel: genomic [0, N] -> x = genomic.
-            ls, le = start, min(end, N)
-            if le > ls and ls < N:
-                rects.append(Rectangle((ls, y0), le - ls, _BAR_H)); facecolors.append(rgba)
-            # Right (3') panel: genomic [L-N, L] -> x = offset + (g - (L-N)).
-            rs, re = max(start, L - N), end
-            if re > rs and re > L - N:
-                x0 = offset + (rs - (L - N))
-                rects.append(Rectangle((x0, y0), re - rs, _BAR_H)); facecolors.append(rgba)
-        # Panel backbones (only the part that exists for short chromosomes).
-        _add_backbone(ax, 0, y, min(N, L), style)
-        _add_backbone(ax, offset + max(0.0, N - L), y, min(N, L), style)
-        # Break marker in the gap.
-        if L > 2 * N:
-            ax.text(N + gap / 2, y, "≈", ha="center", va="center", fontsize=9)
-    if style == "dot":
-        ax.scatter(dot_xs, dot_ys, c=dot_cs, s=dot_size, edgecolors="none", zorder=3)
-    else:
-        _draw_rects(ax, rects, facecolors)
-
-    ax.set_xlim(-0.02 * N, total_x + 0.02 * N)
-    ax.set_ylim(-0.6, n - 0.4)
-
-    step = _nice_step(N)
-    left_pos = np.arange(0, N + 1, step)
-    right_pos = [offset + (N - d) for d in left_pos]          # d = Mb from 3' end
-    ax.set_xticks(list(left_pos) + list(right_pos))
-    ax.set_xticklabels([f"{p / 1e6:g}" for p in left_pos]
-                       + [f"{d / 1e6:g}" for d in left_pos], fontsize=8)
-    # Panel captions, placed a fixed offset below the axis (not axes-fraction, so
-    # they stay put on tall figures).
-    for x, cap in ((N / 2, "Mb from 5′ end"), (offset + N / 2, "Mb from 3′ end")):
-        ax.annotate(cap, xy=(x, 0), xycoords=("data", "axes fraction"),
-                    xytext=(0, -24), textcoords="offset points",
-                    ha="center", va="top")
-
-    _style_and_colorbar(fig, ax, scheme, order, n, f"{scheme.mode} · ends {N / 1e6:g} Mb")
     return fig
 
 
