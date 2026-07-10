@@ -68,10 +68,10 @@ def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title,
         ax.spines[spine].set_visible(False)
     # Stack title + optional note in *points* above the axes top, so they never
     # collide regardless of figure height (a fig-fraction offset would).
-    ax.set_title(f"teloviz — {title}", pad=28 if subtitle else 6)
+    ax.set_title(f"teloviz — {title}", pad=34 if subtitle else 6)
     if subtitle:
         ax.annotate(subtitle, xy=(0.5, 1), xycoords="axes fraction",
-                    xytext=(0, 5), textcoords="offset points",
+                    xytext=(0, 7), textcoords="offset points",
                     ha="center", va="bottom", fontsize=7.5, color="#555")
     # A dedicated bottom colorbar axes (figure coords) keeps a fixed, small gap
     # regardless of how tall the ideogram is — fig.colorbar(ax=...) would reserve
@@ -95,13 +95,18 @@ def _add_backbone(ax, x0, y, width, style):
                                edgecolor="black", linewidth=0.5, zorder=2))
 
 
-def _mark_calls(ax, y, length, call, max_len):
-    """Small inward triangles at telomere-capped ends of one chromosome bar."""
-    pad = 0.008 * max_len
+def _mark_calls(ax, y, length, call, gutter):
+    """Inward triangles marking telomere-capped ends of one chromosome bar.
+
+    The 5' triangle sits in the left *gutter* — the strip between the y-axis
+    (chromosome labels) and x=0 where the bars start — so it can never touch the
+    label. The 3' triangle sits just past the bar's right end, clear of the bar
+    and its dots. Both stay inside the axes (no clipping into the label margin).
+    """
     if call.five:
-        ax.scatter([-pad], [y], marker=">", s=36, color="#111", zorder=4, clip_on=False)
+        ax.scatter([-0.5 * gutter], [y], marker=">", s=34, color="#111", zorder=4)
     if call.three:
-        ax.scatter([length + pad], [y], marker="<", s=36, color="#111", zorder=4, clip_on=False)
+        ax.scatter([length + 0.35 * gutter], [y], marker="<", s=34, color="#111", zorder=4)
 
 
 def render(prepared: Prepared, scheme: ColorScheme, *,
@@ -121,6 +126,9 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
 
     by_id = {c.id: c for c in calls} if calls else {}
     max_len = max(lengths.values()) if lengths else 1
+    # A left gutter (between the labels and x=0) holds the 5' cap triangles, so
+    # they never overlap the chromosome names. Only reserved when calls exist.
+    gutter = 0.05 * max_len if by_id else 0.0
     rects, facecolors = [], []
     dot_xs, dot_ys, dot_cs = [], [], []
     for i, cid in enumerate(order):
@@ -133,14 +141,14 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
                 rects.append(Rectangle((start, y - _BAR_H / 2), end - start, _BAR_H))
                 facecolors.append(rgba)
         if cid in by_id:
-            _mark_calls(ax, y, lengths[cid], by_id[cid], max_len)
+            _mark_calls(ax, y, lengths[cid], by_id[cid], gutter)
     if style == "dot":
         ax.scatter(dot_xs, dot_ys, c=dot_cs, s=dot_size, edgecolors="none", zorder=3)
     else:
         _draw_rects(ax, rects, facecolors)
 
     labels = [cid + (" *" if by_id.get(cid) and by_id[cid].both else "") for cid in order]
-    ax.set_xlim(0, max_len * 1.01)
+    ax.set_xlim(-gutter, max_len * 1.01 + 0.5 * gutter)
     ax.set_ylim(-0.6, n - 0.4)
     ax.set_xlabel("Position (Mb)")
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _p: f"{x / 1e6:g}"))
