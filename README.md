@@ -1,61 +1,117 @@
 # teloviz
 
-Ideogram-style visualization of telomere repeats for assembly QC.
+Ideogram-style visualization of telomere repeats for genome-assembly QC.
 
-`teloviz` reads the per-window telomere-repeat table from
-[`tidk search`](https://github.com/tolkit/telomeric-identifier)
-(`*_telomeric_repeat_windows.tsv`), draws each chromosome as a single
-length-proportional horizontal bar, and color-codes every window by repeat
-amount. Unlike `tidk plot` (per-window line charts), it lays all chromosomes
-side by side so end-to-end capping, strand orientation, and internal
-(interstitial) repeat clusters — a misjoin signal — are visible at a glance.
+`teloviz` takes the per-window telomere-repeat table produced by
+[`tidk search`](https://github.com/tolkit/telomeric-identifier) and draws every
+chromosome as a length-proportional bar, marking where telomeric repeats occur.
+Unlike `tidk plot` (one line chart per sequence), it lays all chromosomes side
+by side, so you can see at a glance:
 
-Two complementary modes:
-- **sum** (default) — `forward + reverse`, white→red. Catches balanced internal
-  clusters the orientation mode can miss.
-- **orientation** — `forward − reverse` (net), diverging blue←white→red. Shows
-  strand structure: normal ends flip red at one tip / blue at the other.
+- **end-to-end capping** — is each chromosome telomere-capped at both ends (T2T)?
+- **strand orientation** — do the ends show the normal forward/reverse flip?
+- **interstitial clusters** — telomeric repeats *inside* a chromosome, a misjoin signal.
 
-Rendered with **matplotlib** to vector **PDF** (default; also PNG/SVG). Fully
-headless — no browser or external binary needed.
+It also **calls** which ends are telomere-capped and writes a summary HTML report.
 
-**Telomere calling:** each end is called telomere-capped when `forward+reverse`
-within `--call-dist` kb of it reaches `--call-min` (defaults 30 kb / 50). Capped
-ends get an inward triangle (5′ ▸ / 3′ ◂) on the plot, both-ends-capped
-chromosomes get a `*`, and a standalone `<prefix>.telomere_report.html` lists the
-per-chromosome counts, calls, and the exact settings/command (disable: `--no-call`).
+Output is vector **PDF** (default; also PNG/SVG), rendered with matplotlib and
+fully headless — no browser or external binary needed, so it runs on an HPC
+login/compute node as-is.
 
-> **Status:** working v0.1 — full pipeline (load → prepare → color → render) for
-> `sum` / `orientation` / `both`, PDF/PNG/SVG output. Try it on the bundled demo:
-> `python demo/make_demo.py && teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode both -o demo/out`.
+---
 
-## Install (dev)
+## Requirements
 
-```bash
-python -m venv .venv && source .venv/bin/activate   # or activate a conda env
-pip install -e .
-```
+- **Python ≥ 3.10**
+- Python packages `pandas`, `matplotlib`, `natsort` (installed automatically below)
+- **[tidk](https://github.com/tolkit/telomeric-identifier)** — *upstream, run separately.*
+  teloviz only visualizes tidk's output; it does not detect repeats itself.
+- Optional: `samtools` (to make the `.fai` index for exact chromosome lengths)
 
-## Usage
+## Installation
 
 ```bash
-# default: sum mode, white→red, bin 100 / cap 500, PDF
-teloviz sample_telomeric_repeat_windows.tsv --fai sample.fa.fai -o sample
+git clone git@github.com:mtok-omu/teloviz.git
+cd teloviz
 
-# orientation mode, tuned bin/cap, log scale
-teloviz sample_..._windows.tsv --mode orientation --bin 50 --cap 1000 --log -o sample_orient
-
-# both modes at once
-teloviz sample_..._windows.tsv --mode both -o sample
-
-# larger dots on a thinner bar
-teloviz sample_..._windows.tsv --fai sample.fa.fai --min-count 50 --dot-size 60 -o sample
+python -m venv .venv && source .venv/bin/activate   # or use a conda env
+pip install .
 ```
 
-Each non-white window is drawn as a fixed-size dot at its genomic centre on a
-length-proportional bar (`--style dot`, default), so telomere arrays — which sit
-in a handful of tiny windows — stay visible instead of vanishing to slivers.
-Use `--style rect` for honest length-proportional rectangles (zoomable vector).
+This installs the `teloviz` command and its dependencies. Check it:
+
+```bash
+teloviz --version
+teloviz --help      # full list of options
+```
+
+## Quick start
+
+Verify your install on the bundled synthetic demo (no tidk needed):
+
+```bash
+python demo/make_demo.py
+teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode both -o demo/out
+# -> demo/out.sum.pdf, demo/out.orientation.pdf, demo/out.telomere_report.html
+```
+
+## Usage on your own assembly
+
+teloviz is step 2 of a two-step workflow — run tidk first, then teloviz:
+
+```bash
+# 1. Detect telomeric repeats per window with tidk (see tidk's docs for flags).
+#    This produces  <name>_telomeric_repeat_windows.tsv
+tidk search --string TTAGGG --output myasm --dir tidk_out genome.fasta
+
+# 2. (optional) exact chromosome lengths for correct bar lengths / end clamping
+samtools faidx genome.fasta          # -> genome.fasta.fai
+
+# 3. Visualize + call telomeres with teloviz
+teloviz tidk_out/myasm_telomeric_repeat_windows.tsv \
+    --fai genome.fasta.fai --mode both -o myasm
+```
+
+More examples:
+
+```bash
+# suppress random-match background (recommended on real data), bigger dots
+teloviz windows.tsv --fai genome.fa.fai --min-count 50 --dot-size 60 -o myasm
+
+# orientation mode with a tuned scale and log color mapping
+teloviz windows.tsv --mode orientation --bin 50 --cap 1000 --log -o myasm
+
+# honest length-proportional rectangles instead of fixed-size dots
+teloviz windows.tsv --style rect -o myasm
+```
+
+## Reading the plot
+
+- Each chromosome is one gray length bar; every window with telomeric repeats is
+  a colored dot at its true position (`--style dot`, default — a fixed on-screen
+  size so tiny telomere windows stay visible; `--style rect` draws true-width
+  rectangles instead).
+- **sum** mode (default): `forward + reverse`, white→red. Catches balanced
+  internal clusters that orientation mode can miss.
+- **orientation** mode: `forward − reverse` (net), diverging blue←white→red.
+  Normal ends flip red at one tip and blue at the other. `--mode both` writes both.
+- **Telomere call:** an end is called capped when `forward+reverse` within
+  `--call-dist` kb of it reaches `--call-min` (defaults 30 kb / 50). Capped ends
+  get an inward triangle (5′ ▸ / 3′ ◂); a chromosome capped at *both* ends gets a
+  `*`. Disable with `--no-call`.
+
+## Output files
+
+For `-o myasm` (and `--format pdf,png` to add PNGs):
+
+| File | What it is |
+|------|-----------|
+| `myasm.sum.pdf` / `myasm.orientation.pdf` | the ideogram(s) for the chosen mode(s) |
+| `myasm.telomere_report.html` | per-chromosome end counts, calls, and the exact settings/command used |
+
+## Options
+
+`teloviz --help` is the authoritative, always-current list. Summary:
 
 | Option | Default | Meaning |
 |--------|---------|---------|
@@ -68,13 +124,13 @@ Use `--style rect` for honest length-proportional rectangles (zoomable vector).
 | `--log` | off | Log-scale color mapping |
 | `--motif` | none | Limit to one motif (default: all) |
 | `--cmap-sum` / `--cmap-div` | `Reds` / `RdBu_r` | Colormaps |
-| `--min-len` | `0` | Drop shorter sequences (0 = keep all) |
-| `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
 | `--style` | `dot` | Mark style: `dot` (fixed-size marker, always visible) / `rect` (length-proportional) |
 | `--dot-size` | `40` | Round marker area in points² (dot style only) |
 | `--call-dist` | `30` | Telomere call: look within this many kb of each end |
 | `--call-min` | `50` | Telomere call: forward+reverse in that end region ≥ this → capped |
 | `--no-call` | off | Disable telomere calling (no end markers, no HTML report) |
+| `--min-len` | `0` | Drop sequences shorter than this (0 = keep all) |
+| `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
 | `--width` / `--height` | auto | Figure size (px) |
 | `--dpi` | `200` | Raster (PNG) resolution |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |
@@ -82,5 +138,6 @@ Use `--style rect` for honest length-proportional rectangles (zoomable vector).
 ## Development
 
 ```bash
+pip install -e .[test]   # editable install + pytest
 pytest
 ```

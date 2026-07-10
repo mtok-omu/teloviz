@@ -43,9 +43,11 @@ def main() -> None:
             lines.append(f"{cid}\t{k * WINDOW}\t{fwd}\t{rev}\tTTAGGG\n")
         fai.append(f"{cid}\t{n * WINDOW}\t0\t{WINDOW}\t{WINDOW + 1}\n")
 
-    (here / "demo_telomeric_repeat_windows.tsv").write_text("".join(lines))
-    (here / "demo.fa.fai").write_text("".join(fai))
-    print("wrote demo_telomeric_repeat_windows.tsv and demo.fa.fai")
+    tsv = here / "demo_telomeric_repeat_windows.tsv"
+    fai_path = here / "demo.fa.fai"
+    tsv.write_text("".join(lines))
+    fai_path.write_text("".join(fai))
+    print(f"wrote {tsv} and {fai_path}")
 
 
 if __name__ == "__main__":
