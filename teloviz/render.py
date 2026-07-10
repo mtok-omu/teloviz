@@ -60,12 +60,19 @@ def _draw_rects(ax, rects, facecolors):
                                           edgecolors="none", zorder=1))
 
 
-def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title):
+def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title,
+                        labels=None, subtitle=None):
     ax.set_yticks(range(n))
-    ax.set_yticklabels(list(reversed(order)))
+    ax.set_yticklabels(list(reversed(labels if labels is not None else order)))
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
-    ax.set_title(f"teloviz — {title}")
+    # Stack title + optional note in *points* above the axes top, so they never
+    # collide regardless of figure height (a fig-fraction offset would).
+    ax.set_title(f"teloviz — {title}", pad=28 if subtitle else 6)
+    if subtitle:
+        ax.annotate(subtitle, xy=(0.5, 1), xycoords="axes fraction",
+                    xytext=(0, 5), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=7.5, color="#555")
     # A dedicated bottom colorbar axes (figure coords) keeps a fixed, small gap
     # regardless of how tall the ideogram is — fig.colorbar(ax=...) would reserve
     # a fraction of a very tall axes and leave a huge blank.
@@ -88,16 +95,31 @@ def _add_backbone(ax, x0, y, width, style):
                                edgecolor="black", linewidth=0.5, zorder=2))
 
 
+def _mark_calls(ax, y, length, call, max_len):
+    """Small inward triangles at telomere-capped ends of one chromosome bar."""
+    pad = 0.008 * max_len
+    if call.five:
+        ax.scatter([-pad], [y], marker=">", s=36, color="#111", zorder=4, clip_on=False)
+    if call.three:
+        ax.scatter([length + pad], [y], marker="<", s=36, color="#111", zorder=4, clip_on=False)
+
+
 def render(prepared: Prepared, scheme: ColorScheme, *,
-           style: str = "dot", dot_size: float = 40.0,
+           style: str = "dot", dot_size: float = 40.0, calls=None,
+           call_note: str | None = None,
            width: int | None = None, height: int | None = None):
-    """Full-length ideogram (one length-proportional bar per chromosome)."""
+    """Full-length ideogram (one length-proportional bar per chromosome).
+
+    ``calls`` (optional list of :class:`~teloviz.calling.Call`) adds telomere-cap
+    markers at capped bar ends and a ``*`` on both-ends-capped chromosome labels.
+    """
     order, lengths = prepared.order, prepared.lengths
     n = len(order)
     fig_w = width / 100 if width else 10.0
     fig_h = height / 100 if height else max(2.0, 0.42 * n + 1.6)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
+    by_id = {c.id: c for c in calls} if calls else {}
     max_len = max(lengths.values()) if lengths else 1
     rects, facecolors = [], []
     dot_xs, dot_ys, dot_cs = [], [], []
@@ -110,16 +132,20 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
             elif end > start:
                 rects.append(Rectangle((start, y - _BAR_H / 2), end - start, _BAR_H))
                 facecolors.append(rgba)
+        if cid in by_id:
+            _mark_calls(ax, y, lengths[cid], by_id[cid], max_len)
     if style == "dot":
         ax.scatter(dot_xs, dot_ys, c=dot_cs, s=dot_size, edgecolors="none", zorder=3)
     else:
         _draw_rects(ax, rects, facecolors)
 
+    labels = [cid + (" *" if by_id.get(cid) and by_id[cid].both else "") for cid in order]
     ax.set_xlim(0, max_len * 1.01)
     ax.set_ylim(-0.6, n - 0.4)
     ax.set_xlabel("Position (Mb)")
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _p: f"{x / 1e6:g}"))
-    _style_and_colorbar(fig, ax, scheme, order, n, scheme.mode)
+    _style_and_colorbar(fig, ax, scheme, order, n, scheme.mode,
+                        labels=labels, subtitle=call_note)
     return fig
 
 

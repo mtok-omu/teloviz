@@ -70,6 +70,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Round marker area in points^2 (dot style only; larger = bigger dots).",
     )
     p.add_argument(
+        "--call-dist", type=float, default=30.0, metavar="KB",
+        help="Telomere call: look within this many kb of each chromosome end "
+             "(tidk windows are ~10 kb, so this is a small multiple of that).",
+    )
+    p.add_argument(
+        "--call-min", type=int, default=50,
+        help="Telomere call: forward+reverse summed over the end region must reach "
+             "this to call the end telomere-capped.",
+    )
+    p.add_argument(
+        "--no-call", action="store_true",
+        help="Disable telomere calling (no end markers on the plot, no HTML report).",
+    )
+    p.add_argument(
         "--min-len", type=int, default=0,
         help="Drop sequences shorter than this (0 = keep all).",
     )
@@ -107,10 +121,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # Import the pipeline lazily so `--version`/`--help` don't pay the matplotlib
     # import cost.
+    from .calling import call_telomeres
     from .color import build_scheme
     from .io_windows import TelovizInputError, load_fai, load_windows
     from .prepare import prepare
     from .render import render, save
+    from .report import write_report
     from ._mpl import plt
 
     try:
@@ -128,6 +144,16 @@ def main(argv: list[str] | None = None) -> int:
         print("teloviz: no sequences to plot (check --motif / --min-len).", file=sys.stderr)
         return 1
 
+    # Telomere calling is one verdict per assembly (mode-independent). Shown on
+    # every plot and, unless disabled, exported as a standalone HTML report.
+    dist_bp = int(args.call_dist * 1000)
+    if args.no_call:
+        calls, call_note = None, None
+    else:
+        calls = call_telomeres(prepared, dist_bp=dist_bp, threshold=args.call_min)
+        call_note = (f"▸◂ telomere call: forward+reverse ≥ {args.call_min} "
+                     f"within {args.call_dist:g} kb of an end   ·   * = both ends")
+
     modes = ["sum", "orientation"] if args.mode == "both" else [args.mode]
     written: list[str] = []
     for mode in modes:
@@ -136,11 +162,28 @@ def main(argv: list[str] | None = None) -> int:
             cmap_sum=args.cmap_sum, cmap_div=args.cmap_div,
         )
         fig = render(prepared, scheme, style=args.style, dot_size=args.dot_size,
+                     calls=calls, call_note=call_note,
                      width=args.width, height=args.height)
         label = mode
         paths = save(fig, out_prefix, label, args.formats, args.dpi)
         plt.close(fig)
         written.extend(str(p) for p in paths)
+
+    if calls is not None:
+        report_path = write_report(
+            f"{out_prefix}.telomere_report.html", calls,
+            meta={
+                "command": "teloviz " + " ".join(argv if argv is not None else sys.argv[1:]),
+                "input": str(args.input),
+                "mode": args.mode,
+                "dist_kb": f"{args.call_dist:g}",
+                "call_min": args.call_min,
+                "min_count": args.min_count,
+                "motif": args.motif,
+                "window_size": prepared.window_size,
+            },
+        )
+        written.append(str(report_path))
 
     print(
         f"teloviz {__version__}: {len(prepared.order)} sequences, "

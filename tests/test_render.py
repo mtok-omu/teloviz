@@ -98,6 +98,23 @@ def test_rect_style_draws_one_rect_per_nonwhite_window():
         plt.close(fig)
 
 
+def test_calls_asterisk_and_markers():
+    from teloviz.calling import Call
+    calls = [Call("chr1", 30000, 300, 300, True, True),   # both -> "chr1 *"
+             Call("chr2", 20000, 300, 0, True, False)]    # 5' only -> no asterisk
+    prepared, scheme = _prepared(), _scheme("sum")
+    plain = render(prepared, scheme, style="dot")
+    marked = render(prepared, scheme, style="dot", calls=calls,
+                    call_note="telomere call")
+    try:
+        labels = [t.get_text() for t in _main_ax(marked).get_yticklabels()]
+        assert "chr1 *" in labels and "chr2" in labels and "chr2 *" not in labels
+        # The capped-end triangles are extra collections beyond the dot scatter.
+        assert len(_main_ax(marked).collections) > len(_main_ax(plain).collections)
+    finally:
+        plt.close(plain); plt.close(marked)
+
+
 def test_save_writes_every_requested_format(tmp_path):
     fig = render(_prepared(), _scheme("sum"), style="dot")
     try:

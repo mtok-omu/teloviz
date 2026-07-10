@@ -55,6 +55,26 @@ def test_end_to_end_both_modes(tmp_path):
             assert f.exists() and f.stat().st_size > 0
 
 
+def test_writes_telomere_report_by_default(tmp_path):
+    tsv = tmp_path / "sample_telomeric_repeat_windows.tsv"
+    tsv.write_text(_windows_tsv())
+    prefix = tmp_path / "out"
+    code = main([str(tsv), "-o", str(prefix), "--format", "png"])
+    assert code == 0
+    report = tmp_path / "out.telomere_report.html"
+    assert report.exists() and report.stat().st_size > 0
+    assert "telomere-cap report" in report.read_text()
+
+
+def test_no_call_suppresses_report(tmp_path):
+    tsv = tmp_path / "x_telomeric_repeat_windows.tsv"
+    tsv.write_text(_windows_tsv())
+    prefix = tmp_path / "out"
+    code = main([str(tsv), "-o", str(prefix), "--format", "png", "--no-call"])
+    assert code == 0
+    assert not (tmp_path / "out.telomere_report.html").exists()
+
+
 def test_min_len_drops_all(tmp_path, capsys):
     tsv = tmp_path / "x_telomeric_repeat_windows.tsv"
     tsv.write_text(_windows_tsv())

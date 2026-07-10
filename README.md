@@ -19,6 +19,12 @@ Two complementary modes:
 Rendered with **matplotlib** to vector **PDF** (default; also PNG/SVG). Fully
 headless — no browser or external binary needed.
 
+**Telomere calling:** each end is called telomere-capped when `forward+reverse`
+within `--call-dist` kb of it reaches `--call-min` (defaults 30 kb / 50). Capped
+ends get an inward triangle (5′ ▸ / 3′ ◂) on the plot, both-ends-capped
+chromosomes get a `*`, and a standalone `<prefix>.telomere_report.html` lists the
+per-chromosome counts, calls, and the exact settings/command (disable: `--no-call`).
+
 > **Status:** working v0.1 — full pipeline (load → prepare → color → render) for
 > `sum` / `orientation` / `both`, PDF/PNG/SVG output. Try it on the bundled demo:
 > `python demo/make_demo.py && teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode both -o demo/sample`.
@@ -68,6 +74,9 @@ Use `--style rect` for honest length-proportional rectangles (zoomable vector).
 | `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
 | `--style` | `dot` | Mark style: `dot` (fixed-size marker, always visible) / `rect` (length-proportional) |
 | `--dot-size` | `40` | Round marker area in points² (dot style only) |
+| `--call-dist` | `30` | Telomere call: look within this many kb of each end |
+| `--call-min` | `50` | Telomere call: forward+reverse in that end region ≥ this → capped |
+| `--no-call` | off | Disable telomere calling (no end markers, no HTML report) |
 | `--width` / `--height` | auto | Figure size (px) |
 | `--dpi` | `200` | Raster (PNG) resolution |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |
