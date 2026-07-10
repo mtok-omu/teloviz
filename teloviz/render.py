@@ -36,7 +36,7 @@ from .prepare import Prepared
 
 # Above this many drawn rectangles we warn (suggest --min-count); still vector.
 _DENSE_WARN = 100_000
-_BAR_H = 0.8            # bar height in y units
+_BAR_H = 0.3            # bar height in y units (thin backbone; dots sit on top)
 _BAR_FILL = "#f0f0f0"  # length-bar body fill in dot style (so the chr is visible)
 
 
@@ -104,7 +104,7 @@ def _add_backbone(ax, x0, y, width, style):
 
 
 def render(prepared: Prepared, scheme: ColorScheme, *,
-           style: str = "dot", dot_size: float = 20.0,
+           style: str = "dot", dot_size: float = 40.0,
            width: int | None = None, height: int | None = None):
     """Full-length ideogram (one length-proportional bar per chromosome)."""
     order, lengths = prepared.order, prepared.lengths
@@ -139,7 +139,7 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
 
 
 def render_ends(prepared: Prepared, scheme: ColorScheme, *, ends_bp: int,
-                style: str = "dot", dot_size: float = 20.0,
+                style: str = "dot", dot_size: float = 40.0,
                 width: int | None = None, height: int | None = None):
     """Both-ends view: first/last ``ends_bp`` per chromosome, joined by a break."""
     order, lengths = prepared.order, prepared.lengths

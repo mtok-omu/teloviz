@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
              "each window, always visible) / rect (honest length-proportional).",
     )
     p.add_argument(
-        "--dot-size", type=float, default=20.0,
+        "--dot-size", type=float, default=40.0,
         help="Round marker area in points^2 (dot style only; larger = bigger dots).",
     )
     p.add_argument(
