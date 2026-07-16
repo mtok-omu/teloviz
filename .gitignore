@@ -15,6 +15,7 @@ tempfiles*/
 # 内部開発ドキュメント(検証データの素性など私的情報を含むためGitHubには上げない)
 /tool_dev.md
 /DEVELOPMENT.md
+/teloviz_annotation_track_spec.md
 
 # ただし demo/ のテストデータは上げる(下で明示的に許可)
 !demo/*.fasta

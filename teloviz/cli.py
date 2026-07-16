@@ -84,6 +84,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable telomere calling (no end markers on the plot, no HTML report).",
     )
     p.add_argument(
+        "--rDNA", dest="rdna", type=Path, default=None, metavar="BED",
+        help="Optional feature BED (rDNA/NOR arrays). Off by default = telomere "
+             "only. Drawn as neutral lanes below each bar (one lane per BED 'type' "
+             "column) and used to annotate uncapped ends in the report. Expected "
+             "pre-merged (bedtools merge); teloviz only visualizes it.",
+    )
+    p.add_argument(
+        "--proximity", type=float, default=500.0, metavar="KB",
+        help="Report-only: an uncapped end is annotated with a feature within "
+             "this many kb of it (annotation distance, not a QC/color threshold). "
+             "Default 500: a real NOR can sit well inside the end (often >100 kb).",
+    )
+    p.add_argument(
         "--min-len", type=int, default=0,
         help="Drop sequences shorter than this (0 = keep all).",
     )
@@ -124,6 +137,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.fai is not None and not args.fai.exists():
         print(f"teloviz: fai not found: {args.fai}", file=sys.stderr)
         return 2
+    if args.rdna is not None and not args.rdna.exists():
+        print(f"teloviz: feature BED not found: {args.rdna}", file=sys.stderr)
+        return 2
 
     out_prefix = args.out_prefix or args.input.name.split("_telomeric_repeat_windows")[0]
 
@@ -131,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     # import cost.
     from .calling import call_telomeres
     from .color import build_scheme
+    from .features import load_features, normalize_features
     from .io_windows import TelovizInputError, load_fai, load_windows
     from .prepare import prepare
     from .render import render, save
@@ -152,6 +169,13 @@ def main(argv: list[str] | None = None) -> int:
         print("teloviz: no sequences to plot (check --motif / --min-len).", file=sys.stderr)
         return 1
 
+    # Optional feature track (off by default). Normalized once against the plotted
+    # chromosome lengths; independent of any color cutoff.
+    features = None
+    if args.rdna is not None:
+        features = normalize_features(load_features(args.rdna), prepared.lengths)
+    proximity_bp = int(args.proximity * 1000)
+
     # Telomere calling is one verdict per assembly (mode-independent). Shown on
     # every plot and, unless disabled, exported as a standalone HTML report.
     dist_bp = int(args.call_dist * 1000)
@@ -171,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         fig = render(prepared, scheme, style=args.style, dot_size=args.dot_size,
                      calls=calls, call_note=call_note, font_size=args.font_size,
-                     width=args.width, height=args.height)
+                     width=args.width, height=args.height, features=features)
         label = mode
         # When the user pins both dimensions, keep the exact size (no tight-bbox
         # trim) so the requested aspect ratio is honored.
@@ -193,7 +217,10 @@ def main(argv: list[str] | None = None) -> int:
                 "min_count": args.min_count,
                 "motif": args.motif,
                 "window_size": prepared.window_size,
+                "features": str(args.rdna) if args.rdna is not None else "",
             },
+            features=features,
+            proximity_bp=proximity_bp,
         )
         written.append(str(report_path))
 

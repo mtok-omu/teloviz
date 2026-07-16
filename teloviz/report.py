@@ -11,6 +11,7 @@ import html
 from pathlib import Path
 
 from .calling import Call
+from .features import FeatureSet
 
 _CSS = """
 body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -26,6 +27,7 @@ code{background:#f4f4f4;padding:.1rem .35rem;border-radius:3px}
 .yes{color:#0a7a2f;font-weight:600} .no{color:#b00;font-weight:600}
 .both{color:#0a7a2f;font-weight:600} .one{color:#b8860b;font-weight:600}
 .none{color:#b00;font-weight:600}
+td.note{color:#444;font-size:.82rem}
 """
 
 
@@ -33,15 +35,42 @@ def _cell_call(ok: bool) -> str:
     return '<td class="yes">✓</td>' if ok else '<td class="no">·</td>'
 
 
+def _end_note(features: FeatureSet, cid: str, length: int, end: str,
+              proximity_bp: int) -> str:
+    """Modifier text for one *uncapped* end (spec section 5.1).
+
+    Names the nearest feature within ``proximity_bp`` of that end (an rDNA/NOR
+    array is the reason a real telomere may be unreachable), or states plainly
+    that no feature is nearby — the absence is itself evidence for a genuine gap.
+    ``end`` is ``"5'"`` (distance measured from position 0) or ``"3'"`` (from the
+    chromosome length).
+    """
+    best = None  # (distance_bp, feature)
+    for f in features.for_chrom(cid):
+        dist = max(0, f.start) if end == "5'" else max(0, length - f.end)
+        if dist <= proximity_bp and (best is None or dist < best[0]):
+            best = (dist, f)
+    if best is None:
+        return f"cap missing — no feature within {proximity_bp / 1000:g} kb"
+    dist, f = best
+    return (f"cap missing — {f.type} ({html.escape(f.name)}) "
+            f"{dist / 1000:g} kb from the {end} end")
+
+
 def _status_class(status: str) -> str:
     return {"both": "both", "none": "none"}.get(status, "one")
 
 
-def write_report(path: str | Path, calls: list[Call], *, meta: dict) -> Path:
+def write_report(path: str | Path, calls: list[Call], *, meta: dict,
+                 features: FeatureSet | None = None,
+                 proximity_bp: int = 200_000) -> Path:
     """Render the report to ``path``; return the Path written.
 
     ``meta`` echoes the run: keys ``command``, ``input``, ``mode``, ``dist_kb``,
-    ``call_min``, ``min_count``, ``motif``, ``window_size``.
+    ``call_min``, ``min_count``, ``motif``, ``window_size`` (and, with features,
+    ``features``). When ``features`` is given, uncapped ends gain a modifier note
+    naming a nearby feature or stating that none is within ``proximity_bp``; the
+    report is otherwise unchanged (subject stays telomere, no feature statistics).
     """
     e = html.escape
     n = len(calls)
@@ -49,6 +78,7 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict) -> Path:
     n_five = sum(c.five for c in calls)
     n_three = sum(c.three for c in calls)
     n_none = sum(c.status == "none" for c in calls)
+    has_feat = features is not None
 
     settings = [
         ("Input", f"<code>{e(str(meta.get('input', '')))}</code>"),
@@ -60,20 +90,32 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict) -> Path:
         ("tidk window size", f"{e(str(meta.get('window_size')))} bp"),
         ("Plot mode(s)", e(str(meta.get("mode")))),
     ]
+    if has_feat:
+        settings.append(("Feature BED", f"<code>{e(str(meta.get('features', '')))}</code>"))
+        settings.append(("Feature proximity (annotation only)", f"{proximity_bp / 1000:g} kb"))
     settings_html = "\n".join(
         f"<dt>{k}</dt><dd>{v}</dd>" for k, v in settings
     )
 
     rows = []
     for c in calls:
+        note_cell = ""
+        if has_feat:
+            notes = []
+            if not c.five:
+                notes.append("5' " + _end_note(features, c.id, c.length, "5'", proximity_bp))
+            if not c.three:
+                notes.append("3' " + _end_note(features, c.id, c.length, "3'", proximity_bp))
+            note_cell = f'<td class="l note">{"<br>".join(notes)}</td>'
         rows.append(
             f'<tr><td class="l">{e(c.id)}{" *" if c.both else ""}</td>'
             f"<td>{c.length / 1e6:.2f}</td>"
             f"<td>{c.five_count}</td>{_cell_call(c.five)}"
             f"<td>{c.three_count}</td>{_cell_call(c.three)}"
-            f'<td class="{_status_class(c.status)}">{e(c.status)}</td></tr>'
+            f'<td class="{_status_class(c.status)}">{e(c.status)}</td>{note_cell}</tr>'
         )
     rows_html = "\n".join(rows)
+    feat_th = '<th class="l">feature notes</th>' if has_feat else ""
 
     doc = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -90,7 +132,7 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict) -> Path:
 <thead><tr>
  <th class="l">chromosome</th><th>length (Mb)</th>
  <th>5' count</th><th>5' call</th>
- <th>3' count</th><th>3' call</th><th>status</th>
+ <th>3' count</th><th>3' call</th><th>status</th>{feat_th}
 </tr></thead>
 <tbody>
 {rows_html}

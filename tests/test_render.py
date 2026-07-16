@@ -7,6 +7,7 @@ labels, and file export. Kept structural (counts / positions), not pixel-exact.
 
 from __future__ import annotations
 
+import matplotlib.colors as mcolors
 import pandas as pd
 import pytest
 from matplotlib.figure import Figure
@@ -113,6 +114,65 @@ def test_calls_asterisk_and_markers():
         assert len(_main_ax(marked).collections) > len(_main_ax(plain).collections)
     finally:
         plt.close(plain); plt.close(marked)
+
+
+def _feature_set():
+    from teloviz.features import Feature, FeatureSet
+    # chr1 gets one rdna_45S feature; chr2 has none.
+    return FeatureSet(
+        features=[Feature("chr1", 5000, 8000, "arr", "rdna_45S")],
+        lane_order=["rdna_45S"],
+    )
+
+
+def test_features_add_lane_patches_below_the_bar():
+    from teloviz.features import color_for_type
+    prepared, scheme = _prepared(), _scheme("sum")
+    plain = render(prepared, scheme, style="dot")
+    withf = render(prepared, scheme, style="dot", features=_feature_set())
+    try:
+        # Exactly one extra patch (the feature rect) beyond the 2 backbone bars.
+        assert len(_main_ax(withf).patches) == len(_main_ax(plain).patches) + 1
+        green = color_for_type("rdna_45S", ["rdna_45S"])
+        feats = [p for p in _main_ax(withf).patches
+                 if mcolors.to_hex(p.get_facecolor()[:3]) == green.lower()]
+        assert len(feats) == 1
+        # The feature sits strictly below the bar it annotates. chr1 is the top
+        # row (order [chr1, chr2] -> y=1); the bar spans y +/- 0.15, so the lane
+        # top must be at or below y - 0.15 = 0.85.
+        assert feats[0].get_y() + feats[0].get_height() <= 1 - 0.15 + 1e-9
+    finally:
+        plt.close(plain); plt.close(withf)
+
+
+def test_features_do_not_change_bar_colors():
+    # The window dot colors must be identical with and without features.
+    prepared, scheme = _prepared(), _scheme("sum")
+    a = render(prepared, scheme, style="dot")
+    b = render(prepared, scheme, style="dot", features=_feature_set())
+    try:
+        ca = _main_ax(a).collections[0].get_facecolor()
+        cb = _main_ax(b).collections[0].get_facecolor()
+        assert (ca == cb).all()
+    finally:
+        plt.close(a); plt.close(b)
+
+
+def test_tiny_feature_widened_and_right_clamped():
+    # A 1 bp feature flush against chr2's right end (length 20000) must be widened
+    # to the min visible width yet never overflow past the chromosome end.
+    from teloviz.features import Feature, FeatureSet
+    fs = FeatureSet(features=[Feature("chr2", 19999, 20000, "tip", "rdna_45S")],
+                    lane_order=["rdna_45S"])
+    fig = render(_prepared(), _scheme("sum"), style="dot", features=fs)
+    try:
+        feats = [p for p in _main_ax(fig).patches
+                 if abs(p.get_height()) < 0.2 and p.get_width() > 1.5]
+        assert feats, "tiny feature should be widened to be visible"
+        f = feats[0]
+        assert f.get_x() + f.get_width() <= 20000 + 1e-6   # clamped, no overflow
+    finally:
+        plt.close(fig)
 
 
 def test_save_writes_every_requested_format(tmp_path):

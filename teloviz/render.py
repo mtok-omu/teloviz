@@ -27,12 +27,20 @@ from matplotlib.ticker import FuncFormatter
 
 from ._mpl import plt
 from .color import ColorScheme
+from .features import FEATURE_ALPHA, FeatureSet, color_for_type, lane_label
 from .prepare import Prepared
 
 # Above this many drawn rectangles we warn (suggest --min-count); still vector.
 _DENSE_WARN = 100_000
 _BAR_H = 0.3            # bar height in y units (thin backbone; dots sit on top)
 _BAR_FILL = "#f0f0f0"  # length-bar body fill in dot style (so the chr is visible)
+
+# Feature lane geometry, in the same y units as the bars (bars are 1.0 apart).
+# All feature types share ONE thin lane just under the bar, distinguished by
+# color, so a feature never drifts down toward the next chromosome (which made it
+# ambiguous which bar it belonged to). The lane hugs the bar it annotates.
+_LANE_TOP_GAP = 0.05   # bar bottom -> lane top
+_LANE_H = 0.14         # lane height
 
 
 def _iter_windows(prepared: Prepared, scheme: ColorScheme, cid: str):
@@ -61,7 +69,7 @@ def _draw_rects(ax, rects, facecolors):
 
 
 def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title,
-                        labels=None, subtitle=None, fs=10.0):
+                        labels=None, subtitle=None, fs=10.0, feat_legend=None):
     # All text sizes are set explicitly (as multiples of the base font size ``fs``)
     # so they survive save() regardless of rcParams. fs=10 reproduces the defaults.
     ax.set_yticks(range(n))
@@ -100,6 +108,18 @@ def _style_and_colorbar(fig, ax, scheme: ColorScheme, order, n, title,
                         ticks=scheme.tick_positions())
     cbar.ax.set_xticklabels(scheme.tick_labels(), fontsize=0.7 * fs)
     cbar.set_label(scheme.cbar_label(), fontsize=fs)
+    # Feature-lane key in the bottom-left margin (left of the colorbar), one swatch
+    # per type. A single legend replaces per-row lane labels, which would be
+    # unreadable repeated on every chromosome in a static multi-chrom ideogram.
+    if feat_legend:
+        from matplotlib.patches import Patch
+        handles = [Patch(facecolor=c, edgecolor="none", alpha=0.6, label=lbl)
+                   for lbl, c in feat_legend]
+        fig.legend(handles=handles, loc="lower left",
+                   bbox_to_anchor=(left_in / fw, 0.3 * r / fh),
+                   frameon=False, fontsize=0.75 * fs, title="features",
+                   title_fontsize=0.8 * fs, handlelength=1.2, handleheight=1.0,
+                   borderaxespad=0.0)
 
 
 def _add_backbone(ax, x0, y, width, style):
@@ -127,10 +147,34 @@ def _mark_calls(ax, y, length, call, gutter):
         ax.scatter([length + 0.35 * gutter], [y], marker="<", s=34, color="#111", zorder=4)
 
 
+def _draw_feature_lanes(ax, y, cid, features: FeatureSet, length, min_w):
+    """Draw this chromosome's features as neutral rects in one shared lane just
+    below the bar, colored by ``type``. Bar colors are never touched; features
+    live strictly outside the bar. Tiny features are widened to ``min_w`` and
+    clamped to the chromosome ends so a 9.8 kb array is still visible on a 67 Mb
+    bar and never overflows the right end. Wider features are drawn first so a
+    narrow feature of another type stacked at the same locus stays on top.
+    """
+    top = y - _BAR_H / 2 - _LANE_TOP_GAP
+    feats = sorted(features.for_chrom(cid), key=lambda f: f.end - f.start,
+                   reverse=True)
+    for f in feats:
+        w = max(f.end - f.start, min_w)
+        x0 = f.start
+        if x0 + w > length:      # right-end clamp: extend leftward, stay flush
+            x0 = length - w
+        if x0 < 0:               # feature wider than the whole (tiny) chromosome
+            x0, w = 0.0, min(w, length)
+        color = color_for_type(f.type, features.lane_order)
+        ax.add_patch(Rectangle((x0, top - _LANE_H), w, _LANE_H, facecolor=color,
+                               edgecolor="none", alpha=FEATURE_ALPHA, zorder=2))
+
+
 def render(prepared: Prepared, scheme: ColorScheme, *,
            style: str = "dot", dot_size: float = 40.0, calls=None,
            call_note: str | None = None, font_size: float = 10.0,
-           width: float | None = None, height: float | None = None):
+           width: float | None = None, height: float | None = None,
+           features: FeatureSet | None = None):
     """Full-length ideogram (one length-proportional bar per chromosome).
 
     ``width``/``height`` are the figure size in inches (both None → auto: width
@@ -152,6 +196,11 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     # A left gutter (between the labels and x=0) holds the 5' cap triangles, so
     # they never overlap the chromosome names. Only reserved when calls exist.
     gutter = 0.05 * max_len if by_id else 0.0
+    # Feature track: one shared lane just below each bar, colored by type. Tiny
+    # features are widened to a fraction of the longest bar so they stay visible;
+    # positions/right-edge stay honest via clamping.
+    has_feat = bool(features and features.lane_order)
+    min_feat_w = max_len / 400.0
     rects, facecolors = [], []
     dot_xs, dot_ys, dot_cs = [], [], []
     for i, cid in enumerate(order):
@@ -163,6 +212,8 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
             elif end > start:
                 rects.append(Rectangle((start, y - _BAR_H / 2), end - start, _BAR_H))
                 facecolors.append(rgba)
+        if has_feat:
+            _draw_feature_lanes(ax, y, cid, features, lengths[cid], min_feat_w)
         if cid in by_id:
             _mark_calls(ax, y, lengths[cid], by_id[cid], gutter)
     if style == "dot":
@@ -172,12 +223,17 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
 
     labels = [cid + (" *" if by_id.get(cid) and by_id[cid].both else "") for cid in order]
     ax.set_xlim(-gutter, max_len * 1.01 + 0.5 * gutter)
-    ax.set_ylim(-0.6, n - 0.4)
+    # Extend the bottom so the lowest chromosome's feature lane is never clipped.
+    stack = (_LANE_TOP_GAP + _LANE_H) if has_feat else 0.0
+    ax.set_ylim(min(-0.6, -(_BAR_H / 2 + stack + 0.08)), n - 0.4)
     ax.set_xlabel("Position (Mb)", fontsize=font_size)
     ax.tick_params(axis="x", labelsize=font_size)
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _p: f"{x / 1e6:g}"))
+    feat_legend = ([(lane_label(t), color_for_type(t, features.lane_order))
+                    for t in features.lane_order] if has_feat else None)
     _style_and_colorbar(fig, ax, scheme, order, n, scheme.mode,
-                        labels=labels, subtitle=call_note, fs=font_size)
+                        labels=labels, subtitle=call_note, fs=font_size,
+                        feat_legend=feat_legend)
     return fig
 
 
