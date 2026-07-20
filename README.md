@@ -90,8 +90,8 @@ teloviz windows.tsv --mode orientation --bin 50 --cap 1000 --log -o myasm
 # honest length-proportional rectangles instead of fixed-size dots
 teloviz windows.tsv --style rect -o myasm
 
-# fix the exact aspect ratio (inches); e.g. a wide 16x6 figure
-teloviz windows.tsv --width 16 --height 6 -o myasm
+# fix the exact aspect ratio (millimeters); e.g. a wide 400x150 mm figure
+teloviz windows.tsv --width 400 --height 150 -o myasm
 
 # add an annotation track (rDNA/NOR arrays) below the bars
 teloviz windows.tsv --fai genome.fa.fai --rDNA features.bed -o myasm
@@ -185,7 +185,7 @@ For `-o myasm` (and `--format pdf,png` to add PNGs):
 | `--min-len` | `0` | Drop sequences shorter than this (0 = keep all) |
 | `--min-count` | `0` | Noise floor: windows with forward+reverse below this → white (both modes) |
 | `--font-size` | `10` | Base text size in points; all labels/title/ticks scale from it |
-| `--width` / `--height` | auto | Figure size in **inches**. Set both to fix the exact aspect ratio (whitespace trim is disabled so the ratio is preserved) |
+| `--width` / `--height` | auto | Figure size in **millimeters** (25.4 mm = 1 in). Set both to fix the exact aspect ratio (whitespace trim is disabled so the ratio is preserved) |
 | `--dpi` | `200` | Raster (PNG) resolution (output px = inches × dpi) |
 | `--format` | `pdf` | `pdf` / `png` / `svg`, comma-separated |
 

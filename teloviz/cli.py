@@ -109,10 +109,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--font-size", type=float, default=10.0, metavar="PT",
                    help="Base text size in points; all labels/title/ticks scale "
                         "from it (default: 10).")
-    p.add_argument("--width", type=float, default=None, metavar="IN",
-                   help="Figure width in inches (default: auto = 10).")
-    p.add_argument("--height", type=float, default=None, metavar="IN",
-                   help="Figure height in inches (default: auto, scales with the "
+    p.add_argument("--width", type=float, default=None, metavar="MM",
+                   help="Figure width in millimeters (default: auto = 254 mm / 10 in).")
+    p.add_argument("--height", type=float, default=None, metavar="MM",
+                   help="Figure height in millimeters (default: auto, scales with the "
                         "number of chromosomes). Set both --width and --height to "
                         "fix the exact aspect ratio (whitespace trimming is turned "
                         "off so the ratio is preserved).")
@@ -193,9 +193,12 @@ def main(argv: list[str] | None = None) -> int:
             mode, bin_w=args.bin, cap=args.cap, log=args.log,
             cmap_sum=args.cmap_sum, cmap_div=args.cmap_div,
         )
+        # Figure sizes are given in mm on the CLI; matplotlib is inch-native.
+        width_in = args.width / 25.4 if args.width is not None else None
+        height_in = args.height / 25.4 if args.height is not None else None
         fig = render(prepared, scheme, style=args.style, dot_size=args.dot_size,
                      calls=calls, call_note=call_note, font_size=args.font_size,
-                     width=args.width, height=args.height, features=features)
+                     width=width_in, height=height_in, features=features)
         label = mode
         # When the user pins both dimensions, keep the exact size (no tight-bbox
         # trim) so the requested aspect ratio is honored.
