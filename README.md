@@ -36,15 +36,37 @@ login/compute node as-is.
 
 ## Installation
 
+### conda (recommended)
+
+One environment holds teloviz *and* its upstream tools, and pins the Python
+version — handy on an HPC whose system Python is older than 3.10.
+
+```bash
+conda create -n teloviz -c conda-forge -c bioconda python=3.11 tidk samtools
+conda activate teloviz
+
+git clone git@github.com:mtok-omu/teloviz.git
+cd teloviz
+pip install .
+```
+
+Add `bedtools` to that `conda create` line if you plan to use the optional
+`--rDNA` track — the `scripts/rrna_gff_to_bed.sh` helper needs it.
+
+### venv (alternative)
+
+teloviz itself is pure Python, so a plain venv works too; you then install
+`tidk` (and `samtools`) separately by whatever means you prefer.
+
 ```bash
 git clone git@github.com:mtok-omu/teloviz.git
 cd teloviz
 
-python -m venv .venv && source .venv/bin/activate   # or use a conda env
+python -m venv .venv && source .venv/bin/activate   # needs Python >= 3.10
 pip install .
 ```
 
-This installs the `teloviz` command and its dependencies. Check it:
+Either way, this installs the `teloviz` command and its dependencies. Check it:
 
 ```bash
 teloviz --version
