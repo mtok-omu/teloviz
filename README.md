@@ -172,6 +172,13 @@ GFF) must match your tidk TSV / `.fai`.
   `--call-dist` kb of it reaches `--call-min` (defaults 30 kb / 50). Capped ends
   get an inward triangle (5′ ▸ / 3′ ◂); a chromosome capped at *both* ends gets a
   `*`. Disable with `--no-call`.
+  - *Note:* teloviz assumes **chromosome-level** input. The call inspects the
+    `--call-dist` kb at each end (30 kb by default), so a sequence shorter than
+    twice that (60 kb by default) has its two end regions overlap — the same
+    windows are counted for both ends. A short contig with telomeric repeats at
+    only one physical end can therefore be **mis-called as capped at both ends**.
+    Filter short contigs out (e.g. `--min-len`) or shrink `--call-dist` if you
+    feed sub-chromosome-scale sequences.
 
 ## Output files
 
