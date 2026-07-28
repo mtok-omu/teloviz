@@ -28,6 +28,7 @@ code{background:#f4f4f4;padding:.1rem .35rem;border-radius:3px}
 .both{color:#0a7a2f;font-weight:600} .one{color:#b8860b;font-weight:600}
 .none{color:#b00;font-weight:600}
 td.note{color:#444;font-size:.82rem}
+.warn{color:#b8860b;cursor:help} .foot{color:#666;font-size:.82rem;margin-top:.8rem}
 """
 
 
@@ -97,7 +98,22 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
         f"<dt>{k}</dt><dd>{v}</dd>" for k, v in settings
     )
 
+    # A sequence shorter than 2x the call distance has its 5' and 3' end regions
+    # overlap, so the same windows are counted for both ends and a "both" call can
+    # be spurious. Flag such rows (teloviz assumes chromosome-level input).
+    try:
+        dist_bp = round(float(meta.get("dist_kb", 0)) * 1000)
+    except (TypeError, ValueError):
+        dist_bp = 0
+    short_thresh = 2 * dist_bp
+    warn_title = (
+        f"length &lt; 2&times; call distance ({short_thresh / 1000:g} kb): "
+        "the 5' and 3' end regions overlap, so a &ldquo;both ends&rdquo; call "
+        "may be unreliable"
+    )
+
     rows = []
+    any_short = False
     for c in calls:
         note_cell = ""
         if has_feat:
@@ -107,14 +123,25 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
             if not c.three:
                 notes.append("3' " + _end_note(features, c.id, c.length, "3'", proximity_bp))
             note_cell = f'<td class="l note">{"<br>".join(notes)}</td>'
+        short = dist_bp > 0 and c.length < short_thresh
+        any_short = any_short or short
+        warn = f' <span class="warn" title="{warn_title}">&#9888;</span>' if short else ""
         rows.append(
             f'<tr><td class="l">{e(c.id)}{" *" if c.both else ""}</td>'
             f"<td>{c.length / 1e6:.2f}</td>"
             f"<td>{c.five_count}</td>{_cell_call(c.five)}"
             f"<td>{c.three_count}</td>{_cell_call(c.three)}"
-            f'<td class="{_status_class(c.status)}">{e(c.status)}</td>{note_cell}</tr>'
+            f'<td class="{_status_class(c.status)}">{e(c.status)}{warn}</td>{note_cell}</tr>'
         )
     rows_html = "\n".join(rows)
+    foot_html = (
+        f'\n<p class="foot">&#9888; sequence shorter than 2&times; the call '
+        f"distance ({short_thresh / 1000:g} kb): its 5' and 3' end regions "
+        "overlap, so the same windows are counted for both ends and a "
+        "&ldquo;both ends&rdquo; call can be spurious. teloviz assumes "
+        "chromosome-level input.</p>"
+        if any_short else ""
+    )
     feat_th = '<th class="l">feature notes</th>' if has_feat else ""
 
     doc = f"""<!doctype html>
@@ -136,7 +163,7 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
 </tr></thead>
 <tbody>
 {rows_html}
-</tbody></table>
+</tbody></table>{foot_html}
 </body></html>
 """
     p = Path(path)

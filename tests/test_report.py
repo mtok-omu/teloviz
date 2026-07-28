@@ -49,6 +49,23 @@ def test_report_has_no_feature_column_without_features(tmp_path):
     assert "feature notes" not in html
 
 
+def test_report_flags_short_contig_and_footnote(tmp_path):
+    # dist_kb=30 -> end regions overlap below 60 kb. A 40 kb contig called both
+    # ends is exactly the spurious-T2T case we warn about.
+    calls = [Call("ctg1", 40_000, 300, 250, True, True)]
+    html = write_report(tmp_path / "r.html", calls, meta=_META).read_text()
+    assert "&#9888;" in html                       # warning glyph on the row
+    assert 'class="foot"' in html                  # explanatory footnote present
+    assert "chromosome-level input" in html
+
+
+def test_report_no_short_flag_for_chromosome_length(tmp_path):
+    # All rows are >= 2x call distance (60 kb): no warning glyph, no footnote.
+    html = write_report(tmp_path / "r.html", _CALLS, meta=_META).read_text()
+    assert "&#9888;" not in html
+    assert 'class="foot"' not in html
+
+
 # chr7 3' un-capped with a 45S array right at that end; chr8 both ends bare, no
 # feature anywhere -> "no feature nearby".
 _FEAT_CALLS = [
