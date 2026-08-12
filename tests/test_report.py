@@ -50,13 +50,14 @@ def test_report_has_no_feature_column_without_features(tmp_path):
 
 
 def test_report_flags_short_contig_and_footnote(tmp_path):
-    # dist_kb=30 -> end regions overlap below 60 kb. A 40 kb contig called both
-    # ends is exactly the spurious-T2T case we warn about.
-    calls = [Call("ctg1", 40_000, 300, 250, True, True)]
+    # dist_kb=30 -> end regions overlap below 60 kb, which call_telomeres records
+    # as short=True. A 40 kb contig called both ends is the spurious-T2T case.
+    calls = [Call("ctg1", 40_000, 300, 250, True, True, short=True)]
     html = write_report(tmp_path / "r.html", calls, meta=_META).read_text()
     assert "&#9888;" in html                       # warning glyph on the row
     assert 'class="foot"' in html                  # explanatory footnote present
     assert "chromosome-level input" in html
+    assert "ctg1 (*)" in html   # uncertain asterisk, same as on the plot
 
 
 def test_report_no_short_flag_for_chromosome_length(tmp_path):

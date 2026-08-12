@@ -34,6 +34,10 @@ from .prepare import Prepared
 _DENSE_WARN = 100_000
 _BAR_H = 0.3            # bar height in y units (thin backbone; dots sit on top)
 _BAR_FILL = "#f0f0f0"  # length-bar body fill in dot style (so the chr is visible)
+_CALL_COLOR = "#111"   # telomere-cap markers on a chromosome-length sequence
+# Sequences too short for the two end regions to be disjoint get their call marks
+# in this amber (the same warning color the HTML report uses) instead of black.
+_WARN_COLOR = "#b8860b"
 
 # Feature lane geometry, in the same y units as the bars (bars are 1.0 apart).
 # All feature types share ONE thin lane just under the bar, distinguished by
@@ -140,11 +144,21 @@ def _mark_calls(ax, y, length, call, gutter):
     (chromosome labels) and x=0 where the bars start — so it can never touch the
     label. The 3' triangle sits just past the bar's right end, clear of the bar
     and its dots. Both stay inside the axes (no clipping into the label margin).
+
+    On a sequence too short for the end regions to be disjoint (``call.short``)
+    the triangles are drawn amber, because the same windows fed both ends and the
+    call may be spurious.
     """
+    color = _WARN_COLOR if call.short else _CALL_COLOR
     if call.five:
-        ax.scatter([-0.5 * gutter], [y], marker=">", s=34, color="#111", zorder=4)
+        ax.scatter([-0.5 * gutter], [y], marker=">", s=34, color=color, zorder=4)
     if call.three:
-        ax.scatter([length + 0.35 * gutter], [y], marker="<", s=34, color="#111", zorder=4)
+        ax.scatter([length + 0.35 * gutter], [y], marker="<", s=34, color=color, zorder=4)
+
+
+def _label_suffix(call) -> str:
+    """``Call.suffix`` for a called chromosome, nothing for an uncalled one."""
+    return call.suffix if call is not None else ""
 
 
 def _draw_feature_lanes(ax, y, cid, features: FeatureSet, length, min_w):
@@ -181,7 +195,9 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     10, height scales with chromosome count). ``font_size`` is the base text size
     in points (all text scales from it; 10 reproduces the defaults). ``calls``
     (optional list of :class:`~teloviz.calling.Call`) adds telomere-cap markers at
-    capped bar ends and a ``*`` on both-ends-capped chromosome labels.
+    capped bar ends and a ``*`` on both-ends-capped chromosome labels. A call on a
+    sequence flagged ``short`` (end regions overlap) is drawn amber and its ``*``
+    parenthesized, since it may be spurious.
     """
     order, lengths = prepared.order, prepared.lengths
     n = len(order)
@@ -221,7 +237,7 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     else:
         _draw_rects(ax, rects, facecolors)
 
-    labels = [cid + (" *" if by_id.get(cid) and by_id[cid].both else "") for cid in order]
+    labels = [cid + _label_suffix(by_id.get(cid)) for cid in order]
     ax.set_xlim(-gutter, max_len * 1.01 + 0.5 * gutter)
     # Extend the bottom so the lowest chromosome's feature lane is never clipped.
     stack = (_LANE_TOP_GAP + _LANE_H) if has_feat else 0.0
@@ -234,6 +250,15 @@ def render(prepared: Prepared, scheme: ColorScheme, *,
     _style_and_colorbar(fig, ax, scheme, order, n, scheme.mode,
                         labels=labels, subtitle=call_note, fs=font_size,
                         feat_legend=feat_legend)
+    # Amber the names of flagged sequences so the warning is visible even where
+    # the marks are (a single triangle in the gutter is easy to miss). Only rows
+    # that actually carry a call are flagged: with nothing called there is no
+    # verdict to distrust. Tick labels run bottom -> top, i.e. reversed(order).
+    warn_ids = {c.id for c in by_id.values() if c.short and (c.five or c.three)}
+    if warn_ids:
+        for tick, cid in zip(ax.get_yticklabels(), reversed(order)):
+            if cid in warn_ids:
+                tick.set_color(_WARN_COLOR)
     return fig
 
 

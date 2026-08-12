@@ -13,6 +13,10 @@ tell apart (annotation-track spec section 6):
        inside it, with sequence beyond -> rDNA present yet the cap is normal.
        The contrast that keeps scenario 1 honest.
     3. chr5  = 5' end un-capped with NO feature nearby -> a genuine gap suspect.
+  - one sub-chromosome-scale contig (ctg_short, 40 kb) with a telomere at ONE
+    end only: below 2x the default --call-dist the two end regions overlap, so
+    that single telomere is counted for both ends and the contig is called
+    capped at both. It is the case the amber "(*)" warning exists to flag.
 Run:  python demo/make_demo.py
 """
 
@@ -31,6 +35,9 @@ CHROMS = {
     "chr7": (70, None, ("5",)),      # 3' un-capped, single 45S unit at that end
     "chr8": (90, None, ("5", "3")),  # capped both ends, 45S array inside the 3' end
     "chr10": (80, None, ("5", "3")),
+    # 40 kb, telomere at the 5' end only -> mis-called "both" (end regions
+    # overlap below 60 kb), so the plot flags it amber and the report ⚠.
+    "ctg_short": (4, None, ("5",)),
 }
 
 # Feature BED (annotation track). 45S only -> a single lane (spec section 2.3).

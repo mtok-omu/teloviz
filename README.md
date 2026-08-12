@@ -83,6 +83,10 @@ teloviz demo/demo_telomeric_repeat_windows.tsv --fai demo/demo.fa.fai --mode bot
 # -> demo/out.sum.pdf, demo/out.orientation.pdf, demo/out.telomere_report.html
 ```
 
+The demo covers a normal T2T chromosome, an interstitial repeat cluster (misjoin
+hint), un-capped ends, and a 40 kb `ctg_short` that trips the short-sequence
+warning described under [Reading the plot](#reading-the-plot).
+
 ## Usage on your own assembly
 
 teloviz is step 2 of a two-step workflow — run tidk first, then teloviz:
@@ -179,6 +183,10 @@ GFF) must match your tidk TSV / `.fai`.
     only one physical end can therefore be **mis-called as capped at both ends**.
     Filter short contigs out (e.g. `--min-len`) or shrink `--call-dist` if you
     feed sub-chromosome-scale sequences.
+  - Such a call is flagged on the plot itself: the sequence name and its cap
+    triangles turn **amber** and the asterisk is parenthesized (`ctg1 (*)`), with
+    the reason spelled out in the note under the title. The same rows carry a ⚠
+    in the HTML report.
 
 ## Output files
 

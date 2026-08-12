@@ -116,6 +116,45 @@ def test_calls_asterisk_and_markers():
         plt.close(plain); plt.close(marked)
 
 
+def _amber_marks(ax):
+    """Collections drawn in the warning amber (one per flagged capped end)."""
+    warn = mcolors.to_rgba("#b8860b")
+    return [c for c in ax.collections
+            if len(c.get_facecolor()) and tuple(c.get_facecolor()[0]) == warn]
+
+
+def test_short_contig_call_is_ambered_and_parenthesized():
+    from teloviz.calling import Call
+    # chr1 flagged short (end regions overlapped), chr2 a normal both-ends call.
+    calls = [Call("chr1", 30000, 300, 300, True, True, short=True),
+             Call("chr2", 20000, 300, 300, True, True)]
+    fig = render(_prepared(), _scheme("sum"), style="dot", calls=calls)
+    try:
+        ax = _main_ax(fig)
+        ticks = {t.get_text(): t for t in ax.get_yticklabels()}
+        assert set(ticks) == {"chr1 (*)", "chr2 *"}   # uncertain call parenthesized
+        warn = mcolors.to_rgba("#b8860b")
+        assert mcolors.to_rgba(ticks["chr1 (*)"].get_color()) == warn
+        assert mcolors.to_rgba(ticks["chr2 *"].get_color()) != warn
+        # Exactly two amber triangles (chr1's two ends); chr2's stay black.
+        assert len(_amber_marks(ax)) == 2
+    finally:
+        plt.close(fig)
+
+
+def test_uncalled_short_contig_is_not_flagged():
+    # Short but nothing called: no verdict to distrust, so the name stays black.
+    from teloviz.calling import Call
+    calls = [Call("chr1", 30000, 0, 0, False, False, short=True),
+             Call("chr2", 20000, 300, 0, True, False)]
+    fig = render(_prepared(), _scheme("sum"), style="dot", calls=calls)
+    try:
+        ticks = {t.get_text(): t for t in _main_ax(fig).get_yticklabels()}
+        assert mcolors.to_rgba(ticks["chr1"].get_color()) != mcolors.to_rgba("#b8860b")
+    finally:
+        plt.close(fig)
+
+
 def _feature_set():
     from teloviz.features import Feature, FeatureSet
     # chr1 gets one rdna_45S feature; chr2 has none.

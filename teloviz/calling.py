@@ -18,6 +18,21 @@ from dataclasses import dataclass
 
 from .prepare import Prepared
 
+# Below this multiple of the call distance the 5' and 3' end regions overlap.
+SHORT_FACTOR = 2
+
+
+def is_short(length: int, dist_bp: int) -> bool:
+    """True if ``length`` is too short for the two end regions to be disjoint.
+
+    The 5' region is ``window <= dist_bp`` and the 3' region is
+    ``window > length - dist_bp``, so below ``SHORT_FACTOR * dist_bp`` they
+    overlap and the same windows are counted for both ends — a sequence with
+    telomeric repeats at only one physical end can then be called capped at
+    both. Single source of truth for the plot and the HTML report.
+    """
+    return dist_bp > 0 and length < SHORT_FACTOR * dist_bp
+
 
 @dataclass
 class Call:
@@ -29,10 +44,23 @@ class Call:
     three_count: int     # forward+reverse summed over the 3' end region
     five: bool           # 5' end called capped (five_count >= threshold)
     three: bool          # 3' end called capped
+    short: bool = False  # end regions overlap at this length (call may be spurious)
 
     @property
     def both(self) -> bool:
         return self.five and self.three
+
+    @property
+    def suffix(self) -> str:
+        """Name suffix: ``*`` for a both-ends call, ``(*)`` when it may be spurious.
+
+        Parenthesizing (rather than only recoloring the plot) keeps the warning
+        readable in grayscale print and for color-vision-deficient readers, and
+        keeps the figure and the HTML report labelled the same way.
+        """
+        if not self.both:
+            return ""
+        return " (*)" if self.short else " *"
 
     @property
     def status(self) -> str:
@@ -60,5 +88,6 @@ def call_telomeres(prepared: Prepared, *, dist_bp: int, threshold: int) -> list[
             id=cid, length=length,
             five_count=five_count, three_count=three_count,
             five=five_count >= threshold, three=three_count >= threshold,
+            short=is_short(length, dist_bp),
         ))
     return calls

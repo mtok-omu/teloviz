@@ -10,7 +10,7 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from .calling import Call
+from .calling import SHORT_FACTOR, Call
 from .features import FeatureSet
 
 _CSS = """
@@ -100,14 +100,16 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
 
     # A sequence shorter than 2x the call distance has its 5' and 3' end regions
     # overlap, so the same windows are counted for both ends and a "both" call can
-    # be spurious. Flag such rows (teloviz assumes chromosome-level input).
+    # be spurious. ``Call.short`` decides which rows are flagged (same flag the
+    # plot ambers); meta only supplies the threshold in kb for the wording.
     try:
         dist_bp = round(float(meta.get("dist_kb", 0)) * 1000)
     except (TypeError, ValueError):
         dist_bp = 0
-    short_thresh = 2 * dist_bp
+    short_thresh = SHORT_FACTOR * dist_bp
+    thresh_txt = (f" ({short_thresh / 1000:g} kb)" if dist_bp else "")
     warn_title = (
-        f"length &lt; 2&times; call distance ({short_thresh / 1000:g} kb): "
+        f"length &lt; 2&times; call distance{thresh_txt}: "
         "the 5' and 3' end regions overlap, so a &ldquo;both ends&rdquo; call "
         "may be unreliable"
     )
@@ -123,11 +125,10 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
             if not c.three:
                 notes.append("3' " + _end_note(features, c.id, c.length, "3'", proximity_bp))
             note_cell = f'<td class="l note">{"<br>".join(notes)}</td>'
-        short = dist_bp > 0 and c.length < short_thresh
-        any_short = any_short or short
-        warn = f' <span class="warn" title="{warn_title}">&#9888;</span>' if short else ""
+        any_short = any_short or c.short
+        warn = f' <span class="warn" title="{warn_title}">&#9888;</span>' if c.short else ""
         rows.append(
-            f'<tr><td class="l">{e(c.id)}{" *" if c.both else ""}</td>'
+            f'<tr><td class="l">{e(c.id)}{c.suffix}</td>'
             f"<td>{c.length / 1e6:.2f}</td>"
             f"<td>{c.five_count}</td>{_cell_call(c.five)}"
             f"<td>{c.three_count}</td>{_cell_call(c.three)}"
@@ -142,6 +143,7 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
         "chromosome-level input.</p>"
         if any_short else ""
     )
+    star_note = "; &quot;(*)&quot; = flagged below" if any_short else ""
     feat_th = '<th class="l">feature notes</th>' if has_feat else ""
 
     doc = f"""<!doctype html>
@@ -151,7 +153,7 @@ def write_report(path: str | Path, calls: list[Call], *, meta: dict,
 <h1>teloviz — telomere-cap report</h1>
 <p class="sub">{n} sequences &middot; both ends capped: <b>{n_both}</b> &middot;
  5' capped: {n_five} &middot; 3' capped: {n_three} &middot; no telomere: {n_none}
- <span style="color:#999">(&quot;*&quot; = both ends)</span></p>
+ <span style="color:#999">(&quot;*&quot; = both ends{star_note})</span></p>
 <dl class="settings">
 {settings_html}
 </dl>

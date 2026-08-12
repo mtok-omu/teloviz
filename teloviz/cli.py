@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Import the pipeline lazily so `--version`/`--help` don't pay the matplotlib
     # import cost.
-    from .calling import call_telomeres
+    from .calling import SHORT_FACTOR, call_telomeres
     from .color import build_scheme
     from .features import load_features, normalize_features
     from .io_windows import TelovizInputError, load_fai, load_windows
@@ -185,6 +185,10 @@ def main(argv: list[str] | None = None) -> int:
         calls = call_telomeres(prepared, dist_bp=dist_bp, threshold=args.call_min)
         call_note = (f"▸◂ telomere call: forward+reverse ≥ {args.call_min} "
                      f"within {args.call_dist:g} kb of an end   ·   * = both ends")
+        # Explain the amber marks only when the figure actually has one.
+        if any(c.short and (c.five or c.three) for c in calls):
+            call_note += (f"   ·   amber (*) = shorter than "
+                          f"{SHORT_FACTOR * args.call_dist:g} kb, call may be spurious")
 
     modes = ["sum", "orientation"] if args.mode == "both" else [args.mode]
     written: list[str] = []

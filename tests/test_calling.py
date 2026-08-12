@@ -56,3 +56,15 @@ def test_uses_min_count_filtered_counts():
     p = prepare(df, fai={"chr1": 20000}, min_count=50)
     (c,) = call_telomeres(p, dist_bp=20000, threshold=10)
     assert c.five_count == 0 and not c.five
+
+
+def test_short_sequence_flagged_when_end_regions_overlap():
+    # 40kb with dist 35kb: the 5' region (<=35kb) and the 3' region (>5kb) overlap,
+    # so the single 5' telomere is counted for both ends -> "both", flagged short.
+    rows = [("chr1", 10000, 300, 0, "T"), ("chr1", 40000, 0, 0, "T")]
+    p = _prepared(rows, fai={"chr1": 40000})
+    (c,) = call_telomeres(p, dist_bp=35000, threshold=50)
+    assert c.short and c.both          # the spurious-T2T case we warn about
+    # Same sequence, a call distance that fits twice: regions disjoint, one end.
+    (c2,) = call_telomeres(p, dist_bp=15000, threshold=50)
+    assert not c2.short and c2.status == "5' only"
